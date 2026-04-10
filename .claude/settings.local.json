@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /Users/jepsenwan/Documents/项目/项目前端/twinkle_twinkle/.claude/skills/impeccable/reference)",
+      "Bash(cp /tmp/impeccable/source/skills/impeccable/SKILL.md /Users/jepsenwan/Documents/项目/项目前端/twinkle_twinkle/.claude/skills/impeccable/)",
+      "Bash(cp /tmp/impeccable/source/skills/impeccable/reference/*.md /Users/jepsenwan/Documents/项目/项目前端/twinkle_twinkle/.claude/skills/impeccable/reference/)"
+    ]
+  }
+}
