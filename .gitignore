@@ -25,8 +25,16 @@ env/
 Thumbs.db
 
 # Media files
-media/uploads/*
-!media/uploads/.gitkeep
+media/
+
+# Logs
+logs/
+
+# Client secrets
+client_secret_*.json
+
+# Virtual env
+.venv/
 
 # Static files
 staticfiles/
