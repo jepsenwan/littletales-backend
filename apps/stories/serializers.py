@@ -198,14 +198,31 @@ class ChildProfileSerializer(serializers.ModelSerializer):
 class StoryCollectionSerializer(serializers.ModelSerializer):
     story_count = serializers.IntegerField(read_only=True)
     thumbnail_url = serializers.ReadOnlyField()
+    display_description = serializers.SerializerMethodField()
 
     class Meta:
         model = StoryCollection
         fields = [
-            'id', 'name', 'description', 'emoji', 'color',
+            'id', 'name', 'description', 'display_description', 'emoji', 'color',
             'story_count', 'thumbnail_url', 'created_at', 'updated_at',
         ]
-        read_only_fields = ['id', 'story_count', 'thumbnail_url', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'story_count', 'thumbnail_url', 'display_description', 'created_at', 'updated_at']
+
+    def get_display_description(self, obj):
+        """Auto-generated description when user hasn't set one."""
+        if obj.description:
+            return obj.description
+        stories = obj.stories.filter(status='completed')[:3]
+        if not stories:
+            return ''
+        types = set(s.story_type for s in stories)
+        children = set(s.child_profile.child_name for s in stories if s.child_profile)
+        parts = []
+        if children:
+            parts.append(', '.join(children))
+        if types:
+            parts.append(' · '.join(types))
+        return ' — '.join(parts)
 
 
 class StoryCollectionDetailSerializer(serializers.ModelSerializer):
