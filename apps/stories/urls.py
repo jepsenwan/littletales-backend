@@ -37,4 +37,12 @@ urlpatterns = [
     # Sharing
     path('<int:pk>/share/', views.toggle_share, name='toggle-share'),
     path('shared/<str:code>/', views.shared_story, name='shared-story'),
+    # Classic Characters
+    path('classic-characters/', views.classic_characters_list, name='classic-characters'),
+    # Discover
+    path('discover/', views.discover_stories, name='discover-stories'),
+    path('<int:pk>/publish/', views.publish_story, name='publish-story'),
+    path('<int:pk>/unpublish/', views.unpublish_story, name='unpublish-story'),
+    # Video export
+    path('<int:pk>/export-video/', views.export_video, name='export-video'),
 ]

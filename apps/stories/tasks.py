@@ -70,19 +70,7 @@ def _generate_text(job, story, params):
     from .services.story_generation import StoryGenerationService
     service = StoryGenerationService()
 
-    # Inject character description if child has a created character
-    if story.child_profile and story.child_profile.character_description:
-        params['character_description'] = story.child_profile.character_description
-        logger.info(f"Injected character description: {story.child_profile.character_description[:60]}")
-
-    story_data = service.generate(params)
-
-    # Update story
-    story.title = story_data.get('title', 'Untitled')
-    story.moral = story_data.get('moral', '')
-    story.save()
-
-    # Auto-create or link ChildProfile
+    # Auto-link ChildProfile early so character description is available
     child_name = params.get('child_name', '')
     if child_name and not story.child_profile:
         profile, _ = ChildProfile.objects.get_or_create(
@@ -95,6 +83,18 @@ def _generate_text(job, story, params):
         )
         story.child_profile = profile
         story.save()
+
+    # Inject character description if child has a created character
+    if story.child_profile and story.child_profile.character_description:
+        params['character_description'] = story.child_profile.character_description
+        logger.info(f"Injected character description: {story.child_profile.character_description[:60]}")
+
+    story_data = service.generate(params)
+
+    # Update story
+    story.title = story_data.get('title', 'Untitled')
+    story.moral = story_data.get('moral', '')
+    story.save()
 
     # Build character description block for consistency enforcement
     characters = story_data.get('characters', {})

@@ -17,11 +17,8 @@ class UserProfile(models.Model):
     ]
 
     THEME_CHOICES = [
-        ('default', 'Starry Night (Default)'),
-        ('ocean', 'Ocean Dream'),
-        ('forest', 'Enchanted Forest'),
-        ('candy', 'Candy Land'),
-        ('sunset', 'Sunset Glow'),
+        ('default', 'Storybook (Default)'),
+        ('nightsky', 'Night Sky'),
     ]
 
     user = models.OneToOneField(User, on_delete=models.CASCADE)

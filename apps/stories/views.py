@@ -2,13 +2,15 @@ from django.conf import settings as django_settings
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import generics, status
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
 from .models import Story, ChildProfile, CustomVoice, GenerationJob, ReadingStats, UsageQuota, StoryFavorite, StoryCollection, StoryQuiz, QuizAttempt
 from .serializers import (
-    StorySerializer, StoryListSerializer, StoryGenerationInputSerializer,
+    StorySerializer, StoryListSerializer, DiscoverStorySerializer,
+    StoryGenerationInputSerializer,
     GenerationJobSerializer, UsageQuotaSerializer, ChildProfileSerializer,
     StoryCollectionSerializer, StoryCollectionDetailSerializer,
 )
@@ -89,8 +91,12 @@ class StoryDetailView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # Allow viewing stories from family members too
+        from django.db import models as db_models
         from apps.users.models import FamilyMember
+        # Public stories are viewable by anyone (logged in)
+        public_q = db_models.Q(is_public=True, status='completed')
+        own_q = db_models.Q(created_by=self.request.user)
+
         family_ids = FamilyMember.objects.filter(
             user=self.request.user
         ).values_list('family_id', flat=True)
@@ -98,8 +104,19 @@ class StoryDetailView(generics.RetrieveAPIView):
             member_ids = FamilyMember.objects.filter(
                 family_id__in=family_ids
             ).values_list('user_id', flat=True).distinct()
-            return Story.objects.filter(created_by__in=member_ids)
-        return Story.objects.filter(created_by=self.request.user)
+            own_q = db_models.Q(created_by__in=member_ids)
+
+        return Story.objects.filter(own_q | public_q)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def classic_characters_list(request):
+    """Return story templates grouped by category. ?locale=zh to filter."""
+    from .classic_characters import get_templates_by_category
+    locale = request.query_params.get('locale')
+    return Response(get_templates_by_category(locale=locale))
 
 
 @api_view(['POST'])
@@ -158,7 +175,16 @@ def generate_story(request):
             data['character_description'] = child_profile.character_description
 
     age = data['age']
-    age_group = '3-5' if age <= 5 else '5-7'
+    if age <= 3:
+        age_group = '1-3'
+    elif age <= 5:
+        age_group = '3-5'
+    elif age <= 7:
+        age_group = '5-7'
+    elif age <= 10:
+        age_group = '8-10'
+    else:
+        age_group = '11-12'
 
     # Stash quota bucket so the celery task can refund correctly on failure
     data_with_quota = dict(data)
@@ -277,78 +303,101 @@ def story_of_the_day(request):
 
     today = date.today()
 
+    # Get user language preference
+    user_lang = 'en'
+    if hasattr(request.user, 'profile') and request.user.profile:
+        user_lang = request.user.profile.language or 'en'
+
     # Expanded theme pool with personality mapping
     THEMES = [
-        {'title': 'The Brave Little Star', 'theme': 'courage', 'emoji': '\u2B50',
+        {'title': 'The Brave Little Star', 'title_zh': '勇敢的小星星', 'theme': 'courage', 'emoji': '\u2B50',
          'desc': 'A story about finding courage when everything feels scary.',
+         'desc_zh': '一个关于在害怕时找到勇气的故事',
          'problem': 'learning to be brave when facing something new and frightening',
          'story_type': 'emotional', 'tags': ['shy', 'anxious', 'afraid_dark']},
-        {'title': 'Sharing is Caring', 'theme': 'sharing', 'emoji': '\U0001F91D',
+        {'title': 'Sharing is Caring', 'title_zh': '分享的快乐', 'theme': 'sharing', 'emoji': '\U0001F91D',
          'desc': 'A warm tale about the joy of sharing with friends.',
+         'desc_zh': '一个关于和朋友分享的温暖故事',
          'problem': 'a child who discovers that sharing makes everyone happier',
          'story_type': 'educational', 'tags': ['no_share', 'stubborn']},
-        {'title': 'Dreamland Express', 'theme': 'bedtime', 'emoji': '\U0001F319',
+        {'title': 'Dreamland Express', 'title_zh': '梦幻列车', 'theme': 'bedtime', 'emoji': '\U0001F319',
          'desc': 'A cozy bedtime journey to a magical dream world.',
+         'desc_zh': '一段通往奇妙梦境的温馨旅程',
          'problem': 'a child who doesn\'t want to sleep discovers a magical dream train',
          'story_type': 'bedtime', 'tags': ['no_sleep']},
-        {'title': 'The Tiny Explorer', 'theme': 'curiosity', 'emoji': '\U0001F9ED',
+        {'title': 'The Tiny Explorer', 'title_zh': '小小探险家', 'theme': 'curiosity', 'emoji': '\U0001F9ED',
          'desc': 'An adventure about asking questions and discovering answers.',
+         'desc_zh': '一场关于提问和发现答案的冒险',
          'problem': 'a curious child who goes on an adventure to find answers to big questions',
          'story_type': 'adventure', 'tags': []},
-        {'title': 'Rainbow Feelings', 'theme': 'emotions', 'emoji': '\U0001F308',
+        {'title': 'Rainbow Feelings', 'title_zh': '彩虹般的心情', 'theme': 'emotions', 'emoji': '\U0001F308',
          'desc': 'Understanding big feelings through colorful adventures.',
+         'desc_zh': '通过五彩缤纷的冒险理解各种情绪',
          'problem': 'a child learning to understand and express different emotions',
          'story_type': 'emotional', 'tags': ['angry', 'anxious']},
-        {'title': 'The Kindness Garden', 'theme': 'kindness', 'emoji': '\U0001F33B',
+        {'title': 'The Kindness Garden', 'title_zh': '善良花园', 'theme': 'kindness', 'emoji': '\U0001F33B',
          'desc': 'Plant seeds of kindness and watch them grow!',
+         'desc_zh': '种下善良的种子，看它们开花！',
          'problem': 'a child who plants magical seeds that grow when they do kind things',
          'story_type': 'educational', 'tags': ['no_share', 'stubborn']},
-        {'title': 'Monster Under the Bed', 'theme': 'fears', 'emoji': '\U0001F47E',
+        {'title': 'Monster Under the Bed', 'title_zh': '床下的小怪物', 'theme': 'fears', 'emoji': '\U0001F47E',
          'desc': 'Making friends with the things that scare us.',
+         'desc_zh': '和害怕的东西做朋友',
          'problem': 'a child who discovers the monster under their bed is actually friendly and lonely',
          'story_type': 'bedtime', 'tags': ['afraid_dark', 'anxious']},
-        {'title': 'The Friendship Quest', 'theme': 'friendship', 'emoji': '\U0001F9F8',
+        {'title': 'The Friendship Quest', 'title_zh': '友谊大冒险', 'theme': 'friendship', 'emoji': '\U0001F9F8',
          'desc': 'A journey to find and keep true friends.',
+         'desc_zh': '一段寻找真正朋友的旅程',
          'problem': 'a child who is shy and learns how to make new friends on an adventure',
          'story_type': 'adventure', 'tags': ['shy']},
-        {'title': 'Healthy Hero', 'theme': 'health', 'emoji': '\U0001F966',
+        {'title': 'Healthy Hero', 'title_zh': '蔬菜超人', 'theme': 'health', 'emoji': '\U0001F966',
          'desc': 'Discover superpowers hidden in healthy food!',
+         'desc_zh': '发现健康食物里隐藏的超能力！',
          'problem': 'a picky eater who discovers that vegetables give real superpowers',
          'story_type': 'educational', 'tags': ['picky_eater']},
-        {'title': 'The Listening Tree', 'theme': 'patience', 'emoji': '\U0001F333',
+        {'title': 'The Listening Tree', 'title_zh': '倾听之树', 'theme': 'patience', 'emoji': '\U0001F333',
          'desc': 'A story about patience and the power of listening.',
+         'desc_zh': '一个关于耐心和倾听力量的故事',
          'problem': 'an impatient child who learns from a wise old tree that good things come to those who wait',
          'story_type': 'emotional', 'tags': ['stubborn', 'angry']},
-        {'title': 'The Calm Cloud', 'theme': 'anger', 'emoji': '\u2601\uFE0F',
+        {'title': 'The Calm Cloud', 'title_zh': '平静的云朵', 'theme': 'anger', 'emoji': '\u2601\uFE0F',
          'desc': 'Learning to cool down when big feelings heat up.',
+         'desc_zh': '学会在生气时冷静下来',
          'problem': 'a child who gets angry easily and discovers a magical cloud that teaches calming tricks',
          'story_type': 'emotional', 'tags': ['angry']},
-        {'title': 'Starlight Sleepover', 'theme': 'sleep', 'emoji': '\U0001FA90',
+        {'title': 'Starlight Sleepover', 'title_zh': '星光派对', 'theme': 'sleep', 'emoji': '\U0001FA90',
          'desc': 'The stars have a bedtime secret to share tonight.',
+         'desc_zh': '星星们有一个睡前秘密要告诉你',
          'problem': 'a child who refuses to go to bed until the stars invite them to a sleepover in the sky',
          'story_type': 'bedtime', 'tags': ['no_sleep']},
-        {'title': 'The Worry Jar', 'theme': 'anxiety', 'emoji': '\U0001FAD9',
+        {'title': 'The Worry Jar', 'title_zh': '烦恼瓶', 'theme': 'anxiety', 'emoji': '\U0001FAD9',
          'desc': 'Putting worries in a jar and watching them shrink.',
+         'desc_zh': '把烦恼装进瓶子里，看它们变小',
          'problem': 'an anxious child who finds a magical jar that shrinks worries into tiny harmless things',
          'story_type': 'emotional', 'tags': ['anxious', 'shy']},
-        {'title': 'Captain Veggie', 'theme': 'food', 'emoji': '\U0001F955',
+        {'title': 'Captain Veggie', 'title_zh': '蔬菜队长', 'theme': 'food', 'emoji': '\U0001F955',
          'desc': 'A superhero adventure powered by vegetables!',
+         'desc_zh': '一场由蔬菜驱动的超级英雄冒险！',
          'problem': 'a picky eater who transforms into a superhero every time they try a new vegetable',
          'story_type': 'adventure', 'tags': ['picky_eater']},
-        {'title': 'The Shadow Friend', 'theme': 'dark', 'emoji': '\U0001F30C',
+        {'title': 'The Shadow Friend', 'title_zh': '影子朋友', 'theme': 'dark', 'emoji': '\U0001F30C',
          'desc': 'Discovering that the dark is full of friendly shadows.',
+         'desc_zh': '发现黑暗中充满了友善的影子',
          'problem': 'a child afraid of the dark who discovers their shadow is a playful friend that only appears at night',
          'story_type': 'bedtime', 'tags': ['afraid_dark']},
-        {'title': 'My Way, Your Way', 'theme': 'compromise', 'emoji': '\U0001F3AF',
+        {'title': 'My Way, Your Way', 'title_zh': '各退一步', 'theme': 'compromise', 'emoji': '\U0001F3AF',
          'desc': 'Two stubborn friends learn the magic of meeting halfway.',
+         'desc_zh': '两个倔强的朋友学会了互相让步的魔力',
          'problem': 'a stubborn child who learns that compromising leads to even better outcomes than getting their own way',
          'story_type': 'educational', 'tags': ['stubborn', 'no_share']},
-        {'title': 'The Treasure Map', 'theme': 'adventure', 'emoji': '\U0001F5FA\uFE0F',
+        {'title': 'The Treasure Map', 'title_zh': '宝藏地图', 'theme': 'adventure', 'emoji': '\U0001F5FA\uFE0F',
          'desc': 'A thrilling treasure hunt through enchanted lands!',
+         'desc_zh': '一场穿越奇幻世界的寻宝冒险！',
          'problem': 'a child who follows a mysterious treasure map through a magical forest',
          'story_type': 'adventure', 'tags': []},
-        {'title': 'The Feelings Paintbrush', 'theme': 'expression', 'emoji': '\U0001F3A8',
+        {'title': 'The Feelings Paintbrush', 'title_zh': '心情画笔', 'theme': 'expression', 'emoji': '\U0001F3A8',
          'desc': 'Painting feelings makes them easier to understand.',
+         'desc_zh': '把心情画出来，就更容易理解了',
          'problem': 'a quiet child who finds a magical paintbrush that paints their feelings into beautiful pictures',
          'story_type': 'emotional', 'tags': ['shy', 'anxious']},
     ]
@@ -359,12 +408,13 @@ def story_of_the_day(request):
         # No children — return single generic recommendation
         day_seed = int(hashlib.md5(today.isoformat().encode()).hexdigest(), 16)
         theme = THEMES[day_seed % len(THEMES)]
+        is_zh = user_lang == 'zh'
         return Response([{
             'date': today.isoformat(),
-            'title': theme['title'],
+            'title': theme.get('title_zh', theme['title']) if is_zh else theme['title'],
             'emoji': theme['emoji'],
-            'description': theme['desc'],
-            'child_name': 'your child',
+            'description': theme.get('desc_zh', theme['desc']) if is_zh else theme['desc'],
+            'child_name': '你的孩子' if is_zh else 'your child',
             'prefill': {
                 'problem_description': theme['problem'],
                 'story_type': theme['story_type'],
@@ -438,13 +488,14 @@ def story_of_the_day(request):
 
         child_age = child.age or 5
 
+        is_zh = user_lang == 'zh'
         recommendations.append({
             'date': today.isoformat(),
             'child_id': child.id,
             'child_name': child.child_name,
-            'title': best['title'],
+            'title': best.get('title_zh', best['title']) if is_zh else best['title'],
             'emoji': best['emoji'],
-            'description': best['desc'],
+            'description': best.get('desc_zh', best['desc']) if is_zh else best['desc'],
             'prefill': {
                 'problem_description': best['problem'],
                 'story_type': best['story_type'],
@@ -955,8 +1006,6 @@ def toggle_share(request, pk):
 
 
 from rest_framework.permissions import AllowAny
-from rest_framework.decorators import authentication_classes
-
 @api_view(['GET'])
 @permission_classes([AllowAny])
 @authentication_classes([])
@@ -971,3 +1020,111 @@ def shared_story(request, code):
     data = serializer.data
     data['shared_by'] = story.created_by.first_name or story.created_by.username
     return Response(data)
+
+
+# ── Discover ──────────────────────────────────────────
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def discover_stories(request):
+    """Public endpoint - list stories published to Discover."""
+    qs = Story.objects.filter(
+        is_public=True, moderation_status='approved', status='completed',
+    ).select_related('created_by').order_by('-published_at')
+
+    age_group = request.query_params.get('age_group')
+    if age_group:
+        qs = qs.filter(age_group=age_group)
+
+    language = request.query_params.get('language')
+    if language:
+        qs = qs.filter(language=language)
+
+    story_type = request.query_params.get('story_type')
+    if story_type:
+        qs = qs.filter(story_type=story_type)
+
+    paginator = PageNumberPagination()
+    page = paginator.paginate_queryset(qs, request)
+    serializer = DiscoverStorySerializer(page, many=True)
+    return paginator.get_paginated_response(serializer.data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def publish_story(request, pk):
+    """Publish a story to Discover. Triggers AI moderation."""
+    try:
+        story = Story.objects.get(id=pk, created_by=request.user, status='completed')
+    except Story.DoesNotExist:
+        return Response({'error': 'Story not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if story.is_public:
+        return Response({'error': 'Story is already published'}, status=status.HTTP_400_BAD_REQUEST)
+
+    from .services.content_moderation import moderate_story_content
+    result = moderate_story_content(story)
+
+    if result['approved']:
+        story.is_public = True
+        story.published_at = timezone.now()
+        story.moderation_status = 'approved'
+        story.moderation_reason = ''
+        story.save(update_fields=['is_public', 'published_at', 'moderation_status', 'moderation_reason'])
+        return Response({'published': True, 'moderation_status': 'approved'})
+    else:
+        story.moderation_status = 'rejected'
+        story.moderation_reason = result['reason']
+        story.save(update_fields=['moderation_status', 'moderation_reason'])
+        return Response({
+            'published': False,
+            'moderation_status': 'rejected',
+            'reason': result['reason'],
+        })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def unpublish_story(request, pk):
+    """Remove a story from Discover."""
+    try:
+        story = Story.objects.get(id=pk, created_by=request.user)
+    except Story.DoesNotExist:
+        return Response({'error': 'Story not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    story.is_public = False
+    story.published_at = None
+    story.moderation_status = 'not_requested'
+    story.save(update_fields=['is_public', 'published_at', 'moderation_status'])
+    return Response({'published': False})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def export_video(request, pk):
+    """Export story as MP4 video with optional speed, BGM, and watermark."""
+    try:
+        story = Story.objects.get(id=pk, created_by=request.user, status='completed')
+    except Story.DoesNotExist:
+        return Response({'error': 'Story not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    speed = float(request.data.get('speed', 1.0))
+    bgm_track = request.data.get('bgm', '')
+
+    # Free users always get watermark, premium users don't
+    is_premium = hasattr(request.user, 'profile') and request.user.profile.plan_type == 'premium'
+    watermark = not is_premium
+
+    # Clamp speed
+    speed = max(0.5, min(2.0, speed))
+
+    from .services.video_export import VideoExportService
+    service = VideoExportService()
+    video_url = service.export(story, speed=speed, bgm_track=bgm_track, watermark=watermark)
+
+    if video_url:
+        return Response({'video_url': video_url})
+    return Response({'error': 'Video export failed'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+

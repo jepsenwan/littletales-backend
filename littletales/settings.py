@@ -161,12 +161,18 @@ REST_FRAMEWORK = {
 
 CORS_ALLOW_ALL_ORIGINS = True
 
-# APIMart AI Configuration
+# Yunwu AI Configuration (primary image generation)
+YUNWU_API_KEY = os.getenv('YUNWU_API_KEY', '')
+YUNWU_BASE_URL = os.getenv('YUNWU_BASE_URL', 'https://yunwu.ai/v1')
+YUNWU_IMAGE_MODEL = os.getenv('YUNWU_IMAGE_MODEL', 'gemini-3.1-flash-image-preview')
+
+# APIMart AI Configuration (fallback image generation)
 APIMART_API_KEY = os.getenv('APIMART_API_KEY', '')
 APIMART_BASE_URL = os.getenv('APIMART_BASE_URL', 'https://api.apimart.ai/v1')
 AI_TEXT_MODEL = os.getenv('AI_TEXT_MODEL', 'gpt-4o-mini')
 AI_IMAGE_MODEL = os.getenv('AI_IMAGE_MODEL', 'doubao-seedance-4-5')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
 
 # Volcengine TTS Configuration
 VOLCENGINE_TTS_APPID = os.getenv('VOLCENGINE_TTS_APPID', '2300143737')
@@ -186,10 +192,19 @@ TTS_VOICES = {
         {'id': 'en_male_dryw_mars_bigtts', 'name': 'Dryw', 'gender': 'male', 'lang': 'en'},
         {'id': 'en_male_smith_mars_bigtts', 'name': 'Smith', 'gender': 'male', 'lang': 'en'},
         {'id': 'en_female_amanda_mars_bigtts', 'name': 'Amanda', 'gender': 'female', 'lang': 'en'},
+        # Children voices (also work for English)
+        {'id': 'zh_male_tiancaitongsheng_mars_bigtts', 'name': 'Child Boy', 'gender': 'male', 'lang': 'en', 'tag': 'child'},
+        {'id': 'zh_male_naiqimengwa_mars_bigtts', 'name': 'Cute Kid', 'gender': 'male', 'lang': 'en', 'tag': 'child'},
+        {'id': 'zh_female_shaoergushi_mars_bigtts', 'name': 'Story Girl', 'gender': 'female', 'lang': 'en', 'tag': 'child'},
+        {'id': 'zh_female_peiqi_uranus_bigtts', 'name': 'Peppa', 'gender': 'female', 'lang': 'en', 'tag': 'child'},
     ],
     'zh': [
-        {'id': 'zh_female_vv_uranus_bigtts', 'name': 'Vivi 2.0', 'gender': 'female', 'lang': 'zh'},
-        {'id': 'zh_female_xiaoxue_uranus_bigtts', 'name': 'Children Story 2.0', 'gender': 'female', 'lang': 'zh'},
+        {'id': 'zh_female_vv_uranus_bigtts', 'name': 'Vivi 2.0', 'name_en': 'Vivi 2.0', 'gender': 'female', 'lang': 'zh'},
+        {'id': 'zh_female_xiaoxue_uranus_bigtts', 'name': '儿童绘本', 'name_en': 'Children Story', 'gender': 'female', 'lang': 'zh'},
+        {'id': 'zh_male_tiancaitongsheng_mars_bigtts', 'name': '天才童声', 'name_en': 'Child Boy', 'gender': 'male', 'lang': 'zh', 'tag': 'child'},
+        {'id': 'zh_male_naiqimengwa_mars_bigtts', 'name': '奶气萌娃', 'name_en': 'Cute Kid', 'gender': 'male', 'lang': 'zh', 'tag': 'child'},
+        {'id': 'zh_female_shaoergushi_mars_bigtts', 'name': '少儿故事', 'name_en': 'Story Girl', 'gender': 'female', 'lang': 'zh', 'tag': 'child'},
+        {'id': 'zh_female_peiqi_uranus_bigtts', 'name': '佩奇猪', 'name_en': 'Peppa', 'gender': 'female', 'lang': 'zh', 'tag': 'child'},
     ],
 }
 

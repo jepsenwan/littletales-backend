@@ -148,6 +148,28 @@ class ChildProfile(models.Model):
         return f"{self.child_name} (age {age})" if age is not None else self.child_name
 
 
+class StorySeries(models.Model):
+    """A series of connected stories for a child around a theme."""
+    title = models.CharField(max_length=200)
+    theme = models.CharField(max_length=100, blank=True, help_text='e.g. afraid_dark, no_sleep')
+    child_profile = models.ForeignKey(
+        'ChildProfile', on_delete=models.SET_NULL, null=True, blank=True, related_name='series'
+    )
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='story_series')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name_plural = 'Story Series'
+
+    def __str__(self):
+        return self.title
+
+    @property
+    def episode_count(self):
+        return self.stories.count()
+
+
 class Story(models.Model):
     STORY_TYPE_CHOICES = [
         ('bedtime', 'Bedtime'),
@@ -161,13 +183,21 @@ class Story(models.Model):
         ('bilingual', 'Bilingual'),
     ]
     AGE_GROUP_CHOICES = [
+        ('1-3', '1-3 years'),
         ('3-5', '3-5 years'),
         ('5-7', '5-7 years'),
+        ('8-10', '8-10 years'),
+        ('11-12', '11-12 years'),
     ]
     STATUS_CHOICES = [
         ('generating', 'Generating'),
         ('completed', 'Completed'),
         ('failed', 'Failed'),
+    ]
+    MODERATION_STATUS_CHOICES = [
+        ('not_requested', 'Not Requested'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
     ]
 
     title = models.CharField(max_length=200, blank=True)
@@ -185,6 +215,16 @@ class Story(models.Model):
         max_length=12, unique=True, null=True, blank=True,
         help_text='Unique code for public sharing link. Null = not shared.'
     )
+    is_public = models.BooleanField(default=False, help_text='Visible on Discover page')
+    published_at = models.DateTimeField(null=True, blank=True)
+    moderation_status = models.CharField(
+        max_length=20, choices=MODERATION_STATUS_CHOICES, default='not_requested',
+    )
+    moderation_reason = models.TextField(blank=True)
+    series = models.ForeignKey(
+        'StorySeries', on_delete=models.SET_NULL, null=True, blank=True, related_name='stories'
+    )
+    episode_number = models.PositiveIntegerField(default=0, help_text='0 = standalone, 1+ = series episode')
     last_played_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

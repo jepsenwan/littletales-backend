@@ -33,7 +33,8 @@ class StorySerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'moral', 'age_group', 'story_type', 'language',
             'status', 'created_by', 'child_profile', 'thumbnail_url',
-            'share_code', 'created_at', 'updated_at', 'pages',
+            'share_code', 'is_public', 'moderation_status', 'published_at',
+            'created_at', 'updated_at', 'pages',
         ]
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
 
@@ -42,6 +43,8 @@ class StoryListSerializer(serializers.ModelSerializer):
     thumbnail_url = serializers.ReadOnlyField()
     is_favorite = serializers.SerializerMethodField()
     created_by_name = serializers.SerializerMethodField()
+    based_on = serializers.SerializerMethodField()
+    child_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Story
@@ -49,6 +52,7 @@ class StoryListSerializer(serializers.ModelSerializer):
             'id', 'title', 'age_group', 'story_type', 'language',
             'status', 'thumbnail_url', 'is_favorite', 'last_played_at',
             'created_at', 'created_by', 'created_by_name',
+            'is_public', 'moderation_status', 'based_on', 'child_name',
         ]
 
     def get_is_favorite(self, obj):
@@ -56,6 +60,36 @@ class StoryListSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return obj.favorites.filter(user=request.user).exists()
         return False
+
+    def get_created_by_name(self, obj):
+        return obj.created_by.first_name or obj.created_by.username
+
+    def get_based_on(self, obj):
+        """Return standardized situation tags instead of raw text."""
+        params = obj.generation_params or {}
+        personality = params.get('personality', [])
+        if personality:
+            return personality  # e.g. ['no_sleep', 'afraid_dark']
+        # Fallback: return story_type as tag
+        return [obj.story_type] if obj.story_type else []
+
+    def get_child_name(self, obj):
+        if obj.child_profile:
+            return obj.child_profile.child_name
+        params = obj.generation_params or {}
+        return params.get('child_name', '')
+
+
+class DiscoverStorySerializer(serializers.ModelSerializer):
+    thumbnail_url = serializers.ReadOnlyField()
+    created_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Story
+        fields = [
+            'id', 'title', 'age_group', 'story_type', 'language',
+            'thumbnail_url', 'created_by_name', 'published_at',
+        ]
 
     def get_created_by_name(self, obj):
         return obj.created_by.first_name or obj.created_by.username
@@ -73,6 +107,13 @@ class StoryGenerationInputSerializer(serializers.Serializer):
     story_type = serializers.ChoiceField(choices=Story.STORY_TYPE_CHOICES)
     language = serializers.ChoiceField(choices=Story.LANGUAGE_CHOICES, default='zh')
     voice = serializers.CharField(required=False, allow_blank=True)
+    story_template = serializers.CharField(required=False, allow_blank=True,
+        help_text="Story template ID, e.g. 'monkey_king_brave'"
+    )
+    classic_characters = serializers.ListField(
+        child=serializers.CharField(), required=False, default=list,
+        help_text="Legacy: classic character IDs"
+    )
     page_count = serializers.ChoiceField(choices=[(4, '4'), (6, '6'), (8, '8')], default=6, required=False)
 
     def validate(self, attrs):

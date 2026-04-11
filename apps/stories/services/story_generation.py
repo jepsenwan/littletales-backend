@@ -164,7 +164,17 @@ Other important rules:
         story_type = params.get('story_type', 'bedtime')
         page_count = params.get('page_count', 6)
 
-        age_group = '3-5' if age <= 5 else '5-7'
+        if age <= 3:
+            age_group = '1-3'
+        elif age <= 5:
+            age_group = '3-5'
+        elif age <= 7:
+            age_group = '5-7'
+        elif age <= 10:
+            age_group = '8-10'
+        else:
+            age_group = '11-12'
+
         has_character = bool(params.get('character_description'))
 
         # When custom character exists, don't force animal characters
@@ -175,12 +185,21 @@ Other important rules:
         )
 
         age_guidance = {
+            '1-3': f"For ages 1-3: Use very simple words, short sentences, lots of repetition and rhythm. "
+                   f"Create exactly {page_count} pages. {char_type_hint}Focus on sensory experiences, simple actions, and familiar objects. "
+                   f"Each page should have 2-3 short sentences (about 30-50 Chinese characters).",
             '3-5': f"For ages 3-5: Use simple vocabulary with some repetition. "
                    f"Create exactly {page_count} pages. {char_type_hint}Focus on basic emotions and daily routines. "
                    f"Each page should have 4-6 sentences (about 80-120 Chinese characters) telling a complete mini-scene with actions, emotions, dialogue, and sensory details.",
             '5-7': f"For ages 5-7: Use richer vocabulary with some new words. "
                    f"Create exactly {page_count} pages. {char_type_hint}Can include more complex plots and problem-solving. "
                    f"Each page should have 5-8 sentences (about 100-150 Chinese characters) with vivid descriptions, character thoughts, dialogue, and scene transitions.",
+            '8-10': f"For ages 8-10: Use sophisticated vocabulary and longer narratives. "
+                    f"Create exactly {page_count} pages. {char_type_hint}Include multi-layered plots, character development, and moral dilemmas. "
+                    f"Each page should have 6-10 sentences (about 150-200 Chinese characters) with rich storytelling.",
+            '11-12': f"For ages 11-12: Use mature vocabulary and complex narrative structures. "
+                     f"Create exactly {page_count} pages. {char_type_hint}Include deeper themes, nuanced characters, and thought-provoking plots. "
+                     f"Each page should have 8-12 sentences (about 200-280 Chinese characters) with literary depth.",
         }
 
         type_guidance = {
@@ -215,6 +234,7 @@ Number of pages: {page_count}
 {type_guidance.get(story_type, type_guidance['bedtime'])}
 
 {self._character_instruction(params)}
+{self._classic_characters_instruction(params)}
 Make the main character relatable to {child_name}. Address the situation naturally through the story's plot without being preachy. The story should feel magical and engaging."""
 
         return prompt
@@ -229,4 +249,39 @@ Make the main character relatable to {child_name}. Address the situation natural
             f"The main character representing {child_name} MUST look exactly like this in EVERY image_prompt: {char_desc}\n"
             f"Use this EXACT description in the 'characters' field and copy it into every image_prompt where this character appears.\n"
             f"Do NOT change the character's species to an animal — keep them as a human child matching this description.\n"
+        )
+
+    def _classic_characters_instruction(self, params):
+        # Support both template_id (new) and classic_characters list (legacy)
+        template_id = params.get('story_template')
+        if template_id:
+            from ..classic_characters import get_template_by_id
+            tpl = get_template_by_id(template_id)
+            if tpl:
+                child_name = params.get('child_name', 'the child')
+                return (
+                    f"\nSTORY TEMPLATE - Use this classic story scenario:\n"
+                    f"Theme: {tpl['title']} / {tpl['title_zh']}\n"
+                    f"Characters:\n{tpl['character_descriptions']}\n\n"
+                    f"Weave these classic characters into an original story with {child_name} as the main character. "
+                    f"The classic characters act as guides, friends, or mentors who HELP {child_name} "
+                    f"deal with the situation/problem described above. "
+                    f"They use their unique traits to comfort, teach, or inspire {child_name}. "
+                    f"Keep each character's personality consistent with their classic portrayal "
+                    f"but adapt them to be age-appropriate and fun.\n"
+                )
+
+        classic_ids = params.get('classic_characters', [])
+        if not classic_ids:
+            return ''
+        from ..classic_characters import get_character_descriptions
+        char_text = get_character_descriptions(classic_ids)
+        if not char_text:
+            return ''
+        child_name = params.get('child_name', 'the child')
+        return (
+            f"\nCLASSIC STORY CHARACTERS - Include these characters in the story:\n"
+            f"{char_text}\n\n"
+            f"Use these classic characters alongside {child_name}. "
+            f"Keep each character's personality consistent with their classic portrayal.\n"
         )
