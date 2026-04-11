@@ -27,12 +27,16 @@ class StoryPageSerializer(serializers.ModelSerializer):
 class StorySerializer(serializers.ModelSerializer):
     pages = StoryPageSerializer(many=True, read_only=True)
     thumbnail_url = serializers.ReadOnlyField()
+    child_profile_name = serializers.SerializerMethodField()
+
+    def get_child_profile_name(self, obj):
+        return obj.child_profile.child_name if obj.child_profile else ''
 
     class Meta:
         model = Story
         fields = [
-            'id', 'title', 'moral', 'age_group', 'story_type', 'language',
-            'status', 'created_by', 'child_profile', 'thumbnail_url',
+            'id', 'title', 'moral', 'goodnight_message', 'age_group', 'story_type', 'language',
+            'status', 'created_by', 'child_profile', 'child_profile_name', 'thumbnail_url',
             'share_code', 'is_public', 'moderation_status', 'published_at',
             'created_at', 'updated_at', 'pages',
         ]
@@ -52,7 +56,7 @@ class StoryListSerializer(serializers.ModelSerializer):
             'id', 'title', 'age_group', 'story_type', 'language',
             'status', 'thumbnail_url', 'is_favorite', 'last_played_at',
             'created_at', 'created_by', 'created_by_name',
-            'is_public', 'moderation_status', 'based_on', 'child_name',
+            'is_public', 'moderation_status', 'based_on', 'child_name', 'problem_hint',
         ]
 
     def get_is_favorite(self, obj):
@@ -69,9 +73,15 @@ class StoryListSerializer(serializers.ModelSerializer):
         params = obj.generation_params or {}
         personality = params.get('personality', [])
         if personality:
-            return personality  # e.g. ['no_sleep', 'afraid_dark']
-        # Fallback: return story_type as tag
+            return personality
         return [obj.story_type] if obj.story_type else []
+
+    problem_hint = serializers.SerializerMethodField()
+
+    def get_problem_hint(self, obj):
+        """Return the original problem description for memory cue."""
+        params = obj.generation_params or {}
+        return params.get('problem_description', '')
 
     def get_child_name(self, obj):
         if obj.child_profile:

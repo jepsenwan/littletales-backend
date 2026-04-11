@@ -202,6 +202,7 @@ class Story(models.Model):
 
     title = models.CharField(max_length=200, blank=True)
     moral = models.TextField(blank=True)
+    goodnight_message = models.CharField(max_length=300, blank=True)
     age_group = models.CharField(max_length=5, choices=AGE_GROUP_CHOICES)
     story_type = models.CharField(max_length=20, choices=STORY_TYPE_CHOICES)
     language = models.CharField(max_length=10, choices=LANGUAGE_CHOICES, default='zh')

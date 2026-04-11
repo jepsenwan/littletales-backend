@@ -94,6 +94,7 @@ def _generate_text(job, story, params):
     # Update story
     story.title = story_data.get('title', 'Untitled')
     story.moral = story_data.get('moral', '')
+    story.goodnight_message = story_data.get('goodnight_message', '')
     story.save()
 
     # Build character description block for consistency enforcement

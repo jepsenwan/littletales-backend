@@ -89,6 +89,7 @@ You MUST return a valid JSON object with this exact structure:
 {{
   "title": "Story title",
   "moral": "The moral or lesson of the story",
+  "goodnight_message": "A short, warm goodnight message for the child (1 sentence, personalized to the story theme). Example: 'Good night, brave explorer. The stars are watching over you.'",
   "characters": {{
     "character_name": "Detailed visual description of this character that stays IDENTICAL across all pages. Example: 'A small white bunny with big pink ears, round brown eyes, wearing a blue striped t-shirt and red shorts'. Be very specific about species/type, colors, clothing, and distinctive features."
   }},
