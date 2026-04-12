@@ -5,12 +5,19 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.http import HttpResponse
+
+
+def healthz(_request):
+    return HttpResponse('ok', content_type='text/plain')
+
 
 urlpatterns = [
+    path('healthz', healthz),
     path('mgt-littletales/', admin.site.urls),
     path('api/v1/stories/', include('apps.stories.urls')),
     path('api/v1/users/', include('apps.users.urls')),
-    
+
     # Django allauth URLs
     path('accounts/', include('allauth.urls')),
 ]
