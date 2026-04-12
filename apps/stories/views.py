@@ -16,12 +16,20 @@ from .serializers import (
 )
 
 
+def _child_profiles_for(user):
+    """Return ChildProfiles the user can see: own + any in a shared family."""
+    from django.db.models import Q
+    from apps.users.models import FamilyMember
+    family_ids = list(FamilyMember.objects.filter(user=user).values_list('family_id', flat=True))
+    return ChildProfile.objects.filter(Q(user=user) | Q(family_id__in=family_ids)).distinct()
+
+
 class ChildProfileListCreateView(generics.ListCreateAPIView):
     serializer_class = ChildProfileSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return ChildProfile.objects.filter(user=self.request.user)
+        return _child_profiles_for(self.request.user)
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -32,7 +40,7 @@ class ChildProfileDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return ChildProfile.objects.filter(user=self.request.user)
+        return _child_profiles_for(self.request.user)
 
 
 class StoryListView(generics.ListAPIView):
