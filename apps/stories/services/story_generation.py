@@ -7,22 +7,20 @@ logger = logging.getLogger(__name__)
 
 
 class StoryGenerationService:
-    def __init__(self):
-        self.client = OpenAI(
-            api_key=settings.APIMART_API_KEY,
-            base_url=settings.APIMART_BASE_URL,
-        )
-        self.model = settings.AI_TEXT_MODEL
-
-    MAX_RETRIES = 3
-
-    FALLBACK_MODEL = 'gpt-5.2-apimart'
+    # Ordered fallback chain: (base_url, api_key, model, label)
+    # Cheapest Yunwu key first, then Yunwu gpt-5 premium, finally APImart.
+    def _provider_chain(self):
+        return [
+            (settings.YUNWU_BASE_URL, 'sk-ObIXXRitJORTQi3Jm2qMDrbHHYrXRNzZXxHo3tr8Qyfp7afs', 'gpt-4o-mini', 'yunwu.xianshi_tejia.4o-mini(¥0.045/0.18)'),
+            (settings.YUNWU_BASE_URL, 'sk-fASIuZ9NgZMgL79aUoiQMdISqQS5fA9bNXkIOQVaIbvxUmki', 'gpt-4o-mini', 'yunwu.nixiang.4o-mini(¥0.1/0.42)'),
+            (settings.YUNWU_BASE_URL, 'sk-ObIXXRitJORTQi3Jm2qMDrbHHYrXRNzZXxHo3tr8Qyfp7afs', 'gpt-5-chat-latest', 'yunwu.xianshi_tejia.gpt-5(¥0.375/3.0)'),
+            (settings.APIMART_BASE_URL, settings.APIMART_API_KEY, 'gpt-5.2-apimart', 'apimart.gpt-5.2'),
+        ]
 
     def generate(self, params):
         """
         Generate a structured story JSON from user input params.
-        Uses streaming to avoid APImart 308 redirect issues.
-        Retries with fallback model on failure.
+        Tries each provider in _provider_chain() in order; first success wins.
         """
         prompt = self._build_prompt(params)
         messages = [
@@ -31,11 +29,13 @@ class StoryGenerationService:
         ]
 
         import time
-        model = self.model
-        for attempt in range(1, self.MAX_RETRIES + 1):
+        last_error = None
+        for base_url, api_key, model, label in self._provider_chain():
+            if not api_key:
+                continue
             try:
-                # Use streaming to work around APImart 308 redirect
-                stream = self.client.chat.completions.create(
+                client = OpenAI(api_key=api_key, base_url=base_url)
+                stream = client.chat.completions.create(
                     model=model,
                     messages=messages,
                     max_tokens=8000,
@@ -44,7 +44,6 @@ class StoryGenerationService:
                     stream=True,
                 )
 
-                # Collect streamed chunks
                 content = ''
                 for chunk in stream:
                     delta = chunk.choices[0].delta if chunk.choices else None
@@ -59,18 +58,16 @@ class StoryGenerationService:
                 if 'title' not in story_data or 'pages' not in story_data:
                     raise ValueError("LLM returned invalid story structure")
 
-                logger.info(f"Story generated with model={model}, {len(content)} chars")
+                logger.info(f"[story-gen] {label} succeeded, {len(content)} chars")
                 return story_data
 
             except Exception as e:
-                logger.warning(f"Story generation attempt {attempt}/{self.MAX_RETRIES} failed ({model}): {e}")
-                if attempt < self.MAX_RETRIES:
-                    if attempt == 1:
-                        model = self.FALLBACK_MODEL
-                        logger.info(f"Switching to fallback model: {model}")
-                    time.sleep(3)
-                    continue
-                raise
+                last_error = e
+                logger.warning(f"[story-gen] {label} failed: {e}, trying next")
+                time.sleep(1)
+
+        logger.error(f"[story-gen] all providers exhausted; last error: {last_error}")
+        raise last_error if last_error else RuntimeError("Story generation: no providers configured")
 
     def _system_prompt(self, params):
         language = params.get('language', 'zh')
@@ -228,6 +225,7 @@ Child's age: {age} years old
 {f"Child's personality traits (DO NOT mention these directly in the story): {personality}" if personality else ""}
 {f"Additional context: {personality_detail}" if personality_detail else ""}
 {f"Current situation/problem: {problem}" if problem else ""}
+{"No specific problem — pick a warm, age-appropriate bedtime theme yourself (e.g. friendship, curiosity, wonder, kindness, or a gentle adventure). Keep it calming and suitable for the child's age." if not problem and not personality else ""}
 Story type: {story_type}
 Number of pages: {page_count}
 

@@ -50,8 +50,8 @@ class ImageGenerationService:
     }
 
     def __init__(self):
-        # Primary: Yunwu
-        self.yunwu_api_key = settings.YUNWU_API_KEY
+        # Primary: Yunwu (with ordered key fallback chain)
+        self.yunwu_api_keys = settings.YUNWU_API_KEYS or ([settings.YUNWU_API_KEY] if settings.YUNWU_API_KEY else [])
         self.yunwu_base_url = settings.YUNWU_BASE_URL
         self.yunwu_model = settings.YUNWU_IMAGE_MODEL
 
@@ -183,16 +183,12 @@ class ImageGenerationService:
     def _yunwu_generate(self, prompt, size=None):
         """
         Generate image via Yunwu API using Gemini image model through chat/completions.
-        Returns image bytes on success, None on failure.
+        Tries each key in yunwu_api_keys in order; returns bytes on first success.
         """
-        if not self.yunwu_api_key:
+        if not self.yunwu_api_keys:
             return None
 
         url = f"{self.yunwu_base_url}/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {self.yunwu_api_key}",
-            "Content-Type": "application/json",
-        }
         payload = {
             "model": self.yunwu_model,
             "messages": [
@@ -203,31 +199,36 @@ class ImageGenerationService:
             ],
         }
 
-        try:
-            resp = requests.post(url, json=payload, headers=headers, timeout=120)
-            resp.raise_for_status()
-            data = resp.json()
+        for idx, key in enumerate(self.yunwu_api_keys, start=1):
+            headers = {
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            }
+            label = f"key#{idx}({key[:12]}...)"
+            try:
+                resp = requests.post(url, json=payload, headers=headers, timeout=120)
+                resp.raise_for_status()
+                data = resp.json()
 
-            if "choices" not in data or not data["choices"]:
-                logger.error(f"[yunwu] No choices in response")
-                return None
+                if "choices" not in data or not data["choices"]:
+                    logger.warning(f"[yunwu] {label} no choices in response, trying next key")
+                    continue
 
-            content = data["choices"][0].get("message", {}).get("content", "")
+                content = data["choices"][0].get("message", {}).get("content", "")
 
-            # Parse base64 image from markdown: ![image](data:image/jpeg;base64,...)
-            match = re.search(r'data:image/[a-z]+;base64,([A-Za-z0-9+/=\s]+)', content)
-            if match:
-                b64_data = match.group(1).replace('\n', '').replace(' ', '')
-                image_bytes = base64.b64decode(b64_data)
-                logger.info(f"[yunwu] Image generated successfully, {len(image_bytes)} bytes")
-                return image_bytes
+                match = re.search(r'data:image/[a-z]+;base64,([A-Za-z0-9+/=\s]+)', content)
+                if match:
+                    b64_data = match.group(1).replace('\n', '').replace(' ', '')
+                    image_bytes = base64.b64decode(b64_data)
+                    logger.info(f"[yunwu] {label} generated {len(image_bytes)} bytes")
+                    return image_bytes
 
-            logger.error(f"[yunwu] No base64 image found in response (content length: {len(content)})")
-            return None
+                logger.warning(f"[yunwu] {label} no base64 in response (content len: {len(content)}), trying next key")
+            except Exception as e:
+                logger.warning(f"[yunwu] {label} failed: {e}, trying next key")
 
-        except Exception as e:
-            logger.error(f"[yunwu] Image generation failed: {e}")
-            return None
+        logger.error(f"[yunwu] all {len(self.yunwu_api_keys)} keys exhausted")
+        return None
 
     def _save_image_data(self, image_bytes, story_id, page_number):
         """Upload raw image bytes to R2."""

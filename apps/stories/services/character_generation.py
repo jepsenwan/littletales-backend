@@ -132,9 +132,58 @@ def analyze_photo(photo_bytes: bytes = None, mime_type: str = 'image/jpeg', phot
         return {}
 
 
+def _image_gen_call(base_url: str, api_key: str, model: str, prompt: str):
+    """Call a generic OpenAI-compatible /images/generations. Returns bytes or None."""
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    resp = requests.post(
+        f"{base_url}/images/generations",
+        headers=headers,
+        json={
+            "model": model,
+            "prompt": prompt,
+            "n": 1,
+            "size": "1024x1024",
+        },
+        timeout=180,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+
+    if "data" not in data or not data["data"]:
+        logger.warning(f"[char-img] no image data in response from {model}")
+        return None
+
+    item = data["data"][0]
+    if "b64_json" in item:
+        return base64.b64decode(item["b64_json"])
+    if "url" in item:
+        url = item["url"]
+        if isinstance(url, list):
+            url = url[0]
+        img_resp = requests.get(url, timeout=60)
+        img_resp.raise_for_status()
+        return img_resp.content
+
+    logger.warning(f"[char-img] unexpected response keys: {list(item.keys())}")
+    return None
+
+
+def _character_image_chain():
+    """Ordered fallback chain: Yunwu keys → APImart. Built at call time so settings are current."""
+    return [
+        (settings.YUNWU_BASE_URL, 'sk-ObIXXRitJORTQi3Jm2qMDrbHHYrXRNzZXxHo3tr8Qyfp7afs', 'gpt-image-1.5-all', 'yunwu.xianshi_tejia(¥0.035)'),
+        (settings.YUNWU_BASE_URL, 'sk-fASIuZ9NgZMgL79aUoiQMdISqQS5fA9bNXkIOQVaIbvxUmki', 'gpt-image-1.5-all', 'yunwu.nixiang(¥0.09)'),
+        (settings.YUNWU_BASE_URL, 'sk-fASIuZ9NgZMgL79aUoiQMdISqQS5fA9bNXkIOQVaIbvxUmki', 'gpt-image-1-all', 'yunwu.nixiang-v1(¥0.05)'),
+        (settings.APIMART_BASE_URL, settings.APIMART_API_KEY, 'gpt-image-1.5', 'apimart.gpt-image-1.5'),
+    ]
+
+
 def generate_character_image(child_profile) -> str:
     """
-    Generate a character reference image using gpt-image-1-mini.
+    Generate a character reference image via Yunwu with ordered fallback chain.
     Returns the R2 URL of the generated image, or empty string on failure.
     """
     description = child_profile.character_description
@@ -149,57 +198,25 @@ def generate_character_image(child_profile) -> str:
         f"No text, no writing."
     )
 
-    try:
-        api_key = settings.APIMART_API_KEY
-        base_url = settings.APIMART_BASE_URL
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
+    img_bytes = None
+    for base_url, api_key, model, label in _character_image_chain():
+        if not api_key:
+            continue
+        try:
+            img_bytes = _image_gen_call(base_url, api_key, model, prompt)
+            if img_bytes:
+                logger.info(f"[char-img] {label} succeeded for child {child_profile.id}")
+                break
+        except Exception as e:
+            logger.warning(f"[char-img] {label} failed: {e}, trying next")
 
-        resp = requests.post(
-            f"{base_url}/images/generations",
-            headers=headers,
-            json={
-                "model": "gpt-image-1-mini",
-                "prompt": prompt,
-                "n": 1,
-                "size": "1024x1024",
-            },
-            timeout=120,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-
-        if "data" not in data or not data["data"]:
-            logger.error(f"No image data in response: {data}")
-            return ''
-
-        item = data["data"][0]
-
-        if "b64_json" in item:
-            img_bytes = base64.b64decode(item["b64_json"])
-        elif "url" in item:
-            url = item["url"]
-            if isinstance(url, list):
-                url = url[0]
-            img_resp = requests.get(url, timeout=30)
-            img_resp.raise_for_status()
-            img_bytes = img_resp.content
-        else:
-            logger.error(f"Unexpected response format: {list(item.keys())}")
-            return ''
-
-        # Upload to R2
-        r2_path = f"characters/{child_profile.id}/reference.png"
-        r2_url = upload_to_r2(img_bytes, r2_path)
-
-        if r2_url:
-            logger.info(f"Character image generated for child {child_profile.id}: {r2_url}")
-            return r2_url
-
+    if not img_bytes:
+        logger.error(f"Character image generation failed for child {child_profile.id}: all keys exhausted")
         return ''
 
-    except Exception as e:
-        logger.error(f"Character image generation failed for child {child_profile.id}: {e}")
-        return ''
+    r2_path = f"characters/{child_profile.id}/reference.png"
+    r2_url = upload_to_r2(img_bytes, r2_path)
+    if r2_url:
+        logger.info(f"Character image uploaded for child {child_profile.id}: {r2_url}")
+        return r2_url
+    return ''

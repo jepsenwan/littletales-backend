@@ -163,6 +163,11 @@ CORS_ALLOW_ALL_ORIGINS = True
 
 # Yunwu AI Configuration (primary image generation)
 YUNWU_API_KEY = os.getenv('YUNWU_API_KEY', '')
+# Ordered fallback keys (comma-separated). Tried in order; first non-empty key wins.
+# Falls back to YUNWU_API_KEY if YUNWU_API_KEYS is unset.
+YUNWU_API_KEYS = [k.strip() for k in os.getenv('YUNWU_API_KEYS', '').split(',') if k.strip()]
+if not YUNWU_API_KEYS and YUNWU_API_KEY:
+    YUNWU_API_KEYS = [YUNWU_API_KEY]
 YUNWU_BASE_URL = os.getenv('YUNWU_BASE_URL', 'https://yunwu.ai/v1')
 YUNWU_IMAGE_MODEL = os.getenv('YUNWU_IMAGE_MODEL', 'gemini-3.1-flash-image-preview')
 

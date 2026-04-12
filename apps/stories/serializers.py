@@ -113,7 +113,7 @@ class StoryGenerationInputSerializer(serializers.Serializer):
     age = serializers.IntegerField(min_value=1, max_value=12, required=False)
     personality = serializers.ListField(child=serializers.CharField(), required=False, default=list)
     personality_detail = serializers.CharField(required=False, allow_blank=True)
-    problem_description = serializers.CharField()
+    problem_description = serializers.CharField(required=False, allow_blank=True, default='')
     story_type = serializers.ChoiceField(choices=Story.STORY_TYPE_CHOICES)
     language = serializers.ChoiceField(choices=Story.LANGUAGE_CHOICES, default='zh')
     voice = serializers.CharField(required=False, allow_blank=True)
