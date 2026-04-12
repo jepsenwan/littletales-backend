@@ -17,11 +17,22 @@ from .serializers import (
 
 
 def _child_profiles_for(user):
-    """Return ChildProfiles the user can see: own + any in a shared family."""
+    """Return ChildProfiles the user can see:
+    - Own (user=me)
+    - Any kid whose family I'm a member of (family FK set)
+    - Any kid created by another member of my family (even if family FK was left null)
+    """
     from django.db.models import Q
     from apps.users.models import FamilyMember
     family_ids = list(FamilyMember.objects.filter(user=user).values_list('family_id', flat=True))
-    return ChildProfile.objects.filter(Q(user=user) | Q(family_id__in=family_ids)).distinct()
+    sibling_user_ids = list(
+        FamilyMember.objects.filter(family_id__in=family_ids).values_list('user_id', flat=True)
+    )
+    return ChildProfile.objects.filter(
+        Q(user=user)
+        | Q(family_id__in=family_ids)
+        | Q(user_id__in=sibling_user_ids)
+    ).distinct()
 
 
 class ChildProfileListCreateView(generics.ListCreateAPIView):
