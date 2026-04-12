@@ -296,10 +296,5 @@ SOCIALACCOUNT_PROVIDERS = {
             'access_type': 'online',
         },
         'OAUTH_PKCE_ENABLED': True,
-        'APP': {
-            'client_id': os.environ.get('GOOGLE_OAUTH_CLIENT_ID', ''),
-            'secret': os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET', ''),
-            'key': ''
-        }
     }
 }
