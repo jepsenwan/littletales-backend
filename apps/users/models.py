@@ -38,6 +38,9 @@ class UserProfile(models.Model):
         help_text='App color theme'
     )
 
+    # Parental gate PIN (hashed). Empty = fall back to math challenge.
+    parental_pin_hash = models.CharField(max_length=128, blank=True, default='')
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

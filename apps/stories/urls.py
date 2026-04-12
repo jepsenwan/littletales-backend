@@ -12,6 +12,8 @@ urlpatterns = [
     path('<int:pk>/played/', views.mark_played, name='mark-played'),
     path('child-profiles/', views.ChildProfileListCreateView.as_view(), name='child-profile-list'),
     path('child-profiles/<int:pk>/', views.ChildProfileDetailView.as_view(), name='child-profile-detail'),
+    path('child-profiles/<int:pk>/report-usage/', views.report_usage, name='report-usage'),
+    path('child-profiles/<int:pk>/add-time/', views.add_time, name='add-time'),
     # Character
     path('child-profiles/<int:pk>/character/generate/', views.generate_character, name='generate-character'),
     path('child-profiles/<int:pk>/character/from-photo/', views.character_from_photo, name='character-from-photo'),

@@ -15,6 +15,7 @@ urlpatterns = [
     path('profile/', views.UserProfileView.as_view(), name='user-profile'),
     path('stats/', views.user_stats, name='user-stats'),
     path('delete-account/', views.delete_account, name='delete-account'),
+    path('parental-pin/', views.parental_pin, name='parental-pin'),
 
     # Family management endpoints
     path('families/', family_views.FamilyListCreateView.as_view(), name='family-list-create'),

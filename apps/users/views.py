@@ -77,3 +77,43 @@ def delete_account(request):
     user.delete()
 
     return Response({'message': 'Account and all associated data have been permanently deleted.'})
+
+
+@api_view(['GET', 'POST', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def parental_pin(request):
+    """Manage the parental gate PIN.
+    GET:    { is_set: bool }
+    POST:   { pin: "1234" }          -> hashes and stores
+    POST:   { pin, action: "verify" } -> verifies (returns { valid: bool })
+    DELETE: clears the PIN (falls back to math challenge)
+    """
+    from django.contrib.auth.hashers import make_password, check_password
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+
+    if request.method == 'GET':
+        return Response({'is_set': bool(profile.parental_pin_hash)})
+
+    if request.method == 'DELETE':
+        profile.parental_pin_hash = ''
+        profile.save(update_fields=['parental_pin_hash'])
+        return Response({'is_set': False})
+
+    # POST
+    pin = str(request.data.get('pin', '')).strip()
+    action = request.data.get('action', 'set')
+
+    if action == 'verify':
+        if not profile.parental_pin_hash:
+            return Response({'valid': False, 'reason': 'no_pin_set'})
+        return Response({'valid': check_password(pin, profile.parental_pin_hash)})
+
+    # set
+    if len(pin) < 4 or len(pin) > 8 or not pin.isdigit():
+        return Response(
+            {'error': 'PIN must be 4-8 digits.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    profile.parental_pin_hash = make_password(pin)
+    profile.save(update_fields=['parental_pin_hash'])
+    return Response({'is_set': True})

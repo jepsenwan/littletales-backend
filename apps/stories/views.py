@@ -54,6 +54,51 @@ class ChildProfileDetailView(generics.RetrieveUpdateDestroyAPIView):
         return _child_profiles_for(self.request.user)
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def report_usage(request, pk):
+    """Client reports playback usage (minutes). Increments current_usage_minutes
+    and returns remaining time + whether to stop.
+    """
+    child = _child_profiles_for(request.user).filter(pk=pk).first()
+    if not child:
+        return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+    minutes = int(request.data.get('minutes', 1))
+    if minutes < 0 or minutes > 10:  # sanity guard
+        minutes = 1
+    child.add_usage(minutes)
+    return Response({
+        'remaining': child.remaining_screen_time,
+        'exceeded': child.is_screen_time_exceeded,
+        'daily_limit': child.daily_screen_limit_minutes,
+        'used': child.current_usage_minutes,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def add_time(request, pk):
+    """Parent grants extra screen time to a child.
+    Decreases current_usage_minutes by requested amount (min 0).
+    Requires parental gate already passed on client; server trusts caller.
+    """
+    child = _child_profiles_for(request.user).filter(pk=pk).first()
+    if not child:
+        return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+    minutes = int(request.data.get('minutes', 10))
+    if minutes <= 0 or minutes > 120:
+        return Response({'error': 'minutes must be 1-120'}, status=status.HTTP_400_BAD_REQUEST)
+    child._reset_usage_if_new_day()
+    child.current_usage_minutes = max(0, child.current_usage_minutes - minutes)
+    child.save(update_fields=['current_usage_minutes', 'last_usage_reset_date'])
+    return Response({
+        'remaining': child.remaining_screen_time,
+        'exceeded': child.is_screen_time_exceeded,
+        'daily_limit': child.daily_screen_limit_minutes,
+        'used': child.current_usage_minutes,
+    })
+
+
 class StoryListView(generics.ListAPIView):
     serializer_class = StoryListSerializer
     permission_classes = [IsAuthenticated]
