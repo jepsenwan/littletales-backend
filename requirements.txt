@@ -14,3 +14,6 @@ django-storages==1.14.6
 requests==2.33.1
 setuptools
 anthropic
+gunicorn==23.0.0
+dj-database-url==2.3.0
+mysqlclient==2.2.7
