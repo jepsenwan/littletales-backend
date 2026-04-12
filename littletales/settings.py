@@ -23,6 +23,10 @@ CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv(
     'CSRF_TRUSTED_ORIGINS', ''
 ).split(',') if o.strip()]
 
+# Behind Railway's proxy: respect X-Forwarded-Proto so Django knows requests are HTTPS.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+
 DJANGO_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
