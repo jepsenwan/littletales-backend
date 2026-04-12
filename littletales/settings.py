@@ -265,7 +265,7 @@ ACCOUNT_AUTHENTICATION_METHOD = 'username_email'
 ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True
 ACCOUNT_SESSION_REMEMBER = True
 ACCOUNT_UNIQUE_EMAIL = True
-LOGIN_REDIRECT_URL = '/oauth-success/'
+LOGIN_REDIRECT_URL = '/api/v1/users/oauth-success/'
 ACCOUNT_LOGOUT_REDIRECT_URL = 'http://localhost:5173/login'
 
 # Social account settings
