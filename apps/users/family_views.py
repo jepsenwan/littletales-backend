@@ -87,8 +87,18 @@ def add_child(request, family_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def my_children(request):
-    """Get all child profiles for the current parent (across all families)."""
-    profiles = ChildProfile.objects.filter(user=request.user).select_related('family')
+    """Get all child profiles visible to the current user — own + any in a
+    family the user belongs to (including kids added by a spouse/co-parent)."""
+    from django.db.models import Q
+    family_ids = list(FamilyMember.objects.filter(user=request.user).values_list('family_id', flat=True))
+    sibling_user_ids = list(
+        FamilyMember.objects.filter(family_id__in=family_ids).values_list('user_id', flat=True)
+    )
+    profiles = ChildProfile.objects.filter(
+        Q(user=request.user)
+        | Q(family_id__in=family_ids)
+        | Q(user_id__in=sibling_user_ids)
+    ).distinct().select_related('family')
     serializer = ChildProfileSerializer(profiles, many=True)
     return Response(serializer.data)
 
