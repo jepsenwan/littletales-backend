@@ -14,7 +14,10 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-me-in-production')
 
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0']
+ALLOWED_HOSTS = [h.strip() for h in os.getenv(
+    'ALLOWED_HOSTS',
+    'localhost,127.0.0.1,0.0.0.0'
+).split(',') if h.strip()]
 
 DJANGO_APPS = [
     'django.contrib.admin',
