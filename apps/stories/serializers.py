@@ -29,9 +29,17 @@ class StorySerializer(serializers.ModelSerializer):
     pages = StoryPageSerializer(many=True, read_only=True)
     thumbnail_url = serializers.ReadOnlyField()
     child_profile_name = serializers.SerializerMethodField()
+    generation_params = serializers.SerializerMethodField()
 
     def get_child_profile_name(self, obj):
         return obj.child_profile.child_name if obj.child_profile else ''
+
+    def get_generation_params(self, obj):
+        """Expose user-facing generation params so the client can
+        prefill a 'Create a similar story' form. Strips private keys
+        that start with underscore (internal bookkeeping)."""
+        params = obj.generation_params or {}
+        return {k: v for k, v in params.items() if not str(k).startswith('_')}
 
     class Meta:
         model = Story
@@ -41,6 +49,7 @@ class StorySerializer(serializers.ModelSerializer):
             'created_by', 'child_profile', 'child_profile_name', 'thumbnail_url',
             'share_code', 'is_public', 'moderation_status', 'published_at',
             'video_url', 'video_exported_at',
+            'generation_params',
             'created_at', 'updated_at', 'pages',
         ]
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
