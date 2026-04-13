@@ -1176,19 +1176,24 @@ def export_video(request, pk):
     speed = float(request.data.get('speed', 1.0))
     bgm_track = request.data.get('bgm', '')
 
-    # Free users always get watermark, premium users don't
-    is_premium = hasattr(request.user, 'profile') and request.user.profile.plan_type == 'premium'
-    watermark = not is_premium
+    # Free users get watermark (Pro tier not yet wired up)
+    watermark = True
 
     # Clamp speed
     speed = max(0.5, min(2.0, speed))
 
     from .services.video_export import VideoExportService
-    service = VideoExportService()
-    video_url = service.export(story, speed=speed, bgm_track=bgm_track, watermark=watermark)
+    import logging, traceback
+    log = logging.getLogger(__name__)
+    try:
+        service = VideoExportService()
+        video_url = service.export(story, speed=speed, bgm_track=bgm_track, watermark=watermark)
+    except Exception as e:
+        log.error(f"export_video error for story {pk}: {e}\n{traceback.format_exc()}")
+        return Response({'error': f'Video export failed: {type(e).__name__}: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     if video_url:
         return Response({'video_url': video_url})
-    return Response({'error': 'Video export failed'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    return Response({'error': 'Video export failed: empty result'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
