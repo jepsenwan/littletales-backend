@@ -1,3 +1,4 @@
 [phases.setup]
-# Add system packages needed at runtime. ffmpeg is required for video export.
-nixPkgs = ['...', 'ffmpeg-full']
+# Extend the default nix packages with ffmpeg. The '...' keeps the defaults
+# (Python, pip, etc.) and appends ours.
+nixPkgs = ['...', 'ffmpeg']
