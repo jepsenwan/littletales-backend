@@ -2,6 +2,7 @@ from rest_framework import serializers
 from .models import (
     ChildProfile, Story, StoryPage, StoryAudio,
     GenerationJob, UsageQuota, StoryCollection,
+    VocabCollection, VocabCollectionItem,
 )
 
 
@@ -238,3 +239,87 @@ class StoryCollectionDetailSerializer(serializers.ModelSerializer):
             'story_count', 'stories', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'story_count', 'stories', 'created_at', 'updated_at']
+
+
+def _resolve_vocab_entry(item: 'VocabCollectionItem'):
+    """Look up the full vocabulary entry (definition/emoji/image_url) from
+    the referenced story page's vocabulary JSON. Returns a dict suitable
+    for flashcard rendering; falls back to just the word if the source
+    entry was edited/deleted."""
+    try:
+        page = StoryPage.objects.get(story_id=item.story_id, page_number=item.page_number)
+    except StoryPage.DoesNotExist:
+        page = None
+    entry = {'word': item.word, 'definition': '', 'emoji': '', 'image_url': ''}
+    if page and page.vocabulary:
+        for v in page.vocabulary:
+            if v.get('word') == item.word:
+                entry['definition'] = v.get('definition', '')
+                entry['emoji'] = v.get('emoji', '')
+                entry['image_url'] = v.get('image_url', '')
+                break
+    return entry
+
+
+class VocabCollectionItemSerializer(serializers.ModelSerializer):
+    word = serializers.CharField(read_only=True)
+    definition = serializers.SerializerMethodField()
+    emoji = serializers.SerializerMethodField()
+    image_url = serializers.SerializerMethodField()
+    story_id = serializers.IntegerField(read_only=True)
+    story_title = serializers.SerializerMethodField()
+    page_number = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = VocabCollectionItem
+        fields = [
+            'id', 'word', 'definition', 'emoji', 'image_url',
+            'story_id', 'story_title', 'page_number', 'added_at',
+        ]
+
+    def _entry(self, obj):
+        cache_key = f'_vocab_entry_{obj.id}'
+        if not hasattr(obj, cache_key):
+            setattr(obj, cache_key, _resolve_vocab_entry(obj))
+        return getattr(obj, cache_key)
+
+    def get_definition(self, obj):
+        return self._entry(obj)['definition']
+
+    def get_emoji(self, obj):
+        return self._entry(obj)['emoji']
+
+    def get_image_url(self, obj):
+        return self._entry(obj)['image_url']
+
+    def get_story_title(self, obj):
+        return obj.story.title
+
+
+class VocabCollectionSerializer(serializers.ModelSerializer):
+    word_count = serializers.IntegerField(read_only=True)
+    sample_words = serializers.SerializerMethodField()
+
+    class Meta:
+        model = VocabCollection
+        fields = [
+            'id', 'name', 'description', 'emoji', 'color',
+            'word_count', 'sample_words', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'word_count', 'sample_words', 'created_at', 'updated_at']
+
+    def get_sample_words(self, obj):
+        return list(obj.items.values_list('word', flat=True)[:6])
+
+
+class VocabCollectionDetailSerializer(serializers.ModelSerializer):
+    items = VocabCollectionItemSerializer(many=True, read_only=True)
+    word_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = VocabCollection
+        fields = [
+            'id', 'name', 'description', 'emoji', 'color',
+            'word_count', 'items', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'word_count', 'items', 'created_at', 'updated_at']

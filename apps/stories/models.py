@@ -476,6 +476,54 @@ class StoryCollection(models.Model):
         return first.thumbnail_url if first else ''
 
 
+class VocabCollection(models.Model):
+    """User-curated collection of vocabulary flashcards saved from stories."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='vocab_collections')
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    emoji = models.CharField(max_length=10, default='📖')
+    color = models.CharField(
+        max_length=20, default='teal',
+        help_text='Theme color key: purple, gold, rose, teal, blue, green, orange'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"{self.emoji} {self.name}"
+
+    @property
+    def word_count(self):
+        return self.items.count()
+
+
+class VocabCollectionItem(models.Model):
+    """A single flashcard inside a VocabCollection.
+
+    We store (story, page_number, word) rather than duplicating the word data
+    so cards stay in sync with the story's vocabulary JSON. The word's
+    definition / emoji / image_url are looked up at serialize time from
+    StoryPage.vocabulary.
+    """
+    collection = models.ForeignKey(
+        VocabCollection, on_delete=models.CASCADE, related_name='items'
+    )
+    story = models.ForeignKey(Story, on_delete=models.CASCADE, related_name='+')
+    page_number = models.PositiveIntegerField()
+    word = models.CharField(max_length=100)
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-added_at']
+        unique_together = ['collection', 'story', 'page_number', 'word']
+
+    def __str__(self):
+        return f"{self.word} (story {self.story_id} p{self.page_number})"
+
+
 class VocabularyReview(models.Model):
     """Tracks how many times a child has reviewed a vocabulary word."""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='vocab_reviews')

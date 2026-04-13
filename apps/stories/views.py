@@ -7,12 +7,13 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
-from .models import Story, ChildProfile, CustomVoice, GenerationJob, ReadingStats, UsageQuota, StoryFavorite, StoryCollection, StoryQuiz, QuizAttempt
+from .models import Story, ChildProfile, CustomVoice, GenerationJob, ReadingStats, UsageQuota, StoryFavorite, StoryCollection, StoryQuiz, QuizAttempt, VocabCollection, VocabCollectionItem, StoryPage
 from .serializers import (
     StorySerializer, StoryListSerializer, DiscoverStorySerializer,
     StoryGenerationInputSerializer,
     GenerationJobSerializer, UsageQuotaSerializer, ChildProfileSerializer,
     StoryCollectionSerializer, StoryCollectionDetailSerializer,
+    VocabCollectionSerializer, VocabCollectionDetailSerializer,
 )
 
 
@@ -816,6 +817,127 @@ def story_collections_for_story(request, pk):
     collections = StoryCollection.objects.filter(user=request.user, stories__id=pk)
     serializer = StoryCollectionSerializer(collections, many=True)
     return Response(serializer.data)
+
+
+# ── Vocab Collections ──
+
+class VocabCollectionListCreateView(generics.ListCreateAPIView):
+    serializer_class = VocabCollectionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return VocabCollection.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class VocabCollectionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return VocabCollection.objects.filter(user=self.request.user)
+
+    def get_serializer_class(self):
+        if self.request.method == 'GET':
+            return VocabCollectionDetailSerializer
+        return VocabCollectionSerializer
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def vocab_collection_add_word(request, pk):
+    """Add a word flashcard to a vocab collection.
+
+    Body: { story_id, page_number, word }
+    """
+    try:
+        collection = VocabCollection.objects.get(id=pk, user=request.user)
+    except VocabCollection.DoesNotExist:
+        return Response({'error': 'Collection not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    story_id = request.data.get('story_id')
+    page_number = request.data.get('page_number')
+    word = (request.data.get('word') or '').strip()
+    if not story_id or page_number is None or not word:
+        return Response(
+            {'error': 'story_id, page_number, and word are required'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Only allow saving words from stories the user can see (own + family)
+    try:
+        story = Story.objects.get(id=story_id)
+    except Story.DoesNotExist:
+        return Response({'error': 'Story not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Verify the word actually exists on that page
+    page = StoryPage.objects.filter(story=story, page_number=page_number).first()
+    if not page or not any((v.get('word') == word) for v in (page.vocabulary or [])):
+        return Response(
+            {'error': 'Word not found on that story page'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    item, created = VocabCollectionItem.objects.get_or_create(
+        collection=collection, story=story, page_number=page_number, word=word,
+    )
+    collection.save(update_fields=['updated_at'])
+    return Response({'status': 'added' if created else 'exists', 'item_id': item.id})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def vocab_collection_remove_word(request, pk):
+    """Remove a word flashcard from a vocab collection.
+
+    Body: { item_id }  OR  { story_id, page_number, word }
+    """
+    try:
+        collection = VocabCollection.objects.get(id=pk, user=request.user)
+    except VocabCollection.DoesNotExist:
+        return Response({'error': 'Collection not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    item_id = request.data.get('item_id')
+    qs = VocabCollectionItem.objects.filter(collection=collection)
+    if item_id:
+        qs = qs.filter(id=item_id)
+    else:
+        story_id = request.data.get('story_id')
+        page_number = request.data.get('page_number')
+        word = request.data.get('word')
+        if not story_id or page_number is None or not word:
+            return Response(
+                {'error': 'item_id or (story_id, page_number, word) required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        qs = qs.filter(story_id=story_id, page_number=page_number, word=word)
+
+    deleted, _ = qs.delete()
+    collection.save(update_fields=['updated_at'])
+    return Response({'status': 'removed', 'deleted': deleted})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def vocab_collections_for_word(request):
+    """Return the vocab collections that already contain a given word.
+
+    Query params: story_id, page_number, word
+    """
+    story_id = request.query_params.get('story_id')
+    page_number = request.query_params.get('page_number')
+    word = request.query_params.get('word')
+    if not story_id or page_number is None or not word:
+        return Response([])
+    ids = VocabCollectionItem.objects.filter(
+        collection__user=request.user,
+        story_id=story_id,
+        page_number=page_number,
+        word=word,
+    ).values_list('collection_id', flat=True)
+    cols = VocabCollection.objects.filter(user=request.user, id__in=list(ids))
+    return Response(VocabCollectionSerializer(cols, many=True).data)
 
 
 # ── Character ──

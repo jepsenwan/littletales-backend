@@ -30,6 +30,12 @@ urlpatterns = [
     path('collections/<int:pk>/add-story/', views.collection_add_story, name='collection-add-story'),
     path('collections/<int:pk>/remove-story/', views.collection_remove_story, name='collection-remove-story'),
     path('<int:pk>/collections/', views.story_collections_for_story, name='story-collections'),
+    # Vocab Collections
+    path('vocab-collections/', views.VocabCollectionListCreateView.as_view(), name='vocab-collection-list'),
+    path('vocab-collections/<int:pk>/', views.VocabCollectionDetailView.as_view(), name='vocab-collection-detail'),
+    path('vocab-collections/<int:pk>/add-word/', views.vocab_collection_add_word, name='vocab-collection-add-word'),
+    path('vocab-collections/<int:pk>/remove-word/', views.vocab_collection_remove_word, name='vocab-collection-remove-word'),
+    path('vocab-collections/for-word/', views.vocab_collections_for_word, name='vocab-collections-for-word'),
     # Vocabulary
     path('<int:pk>/vocabulary/review/', views.review_vocabulary, name='review-vocabulary'),
     path('<int:pk>/vocabulary/stats/', views.get_vocabulary_stats, name='vocabulary-stats'),
