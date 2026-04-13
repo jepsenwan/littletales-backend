@@ -38,8 +38,7 @@ class VideoExportService:
         """
         pages = list(story.pages.all().order_by('page_number'))
         if not pages:
-            logger.error(f"No pages for story {story.id}")
-            return None
+            raise RuntimeError(f"No pages for story {story.id}")
 
         tmpdir = tempfile.mkdtemp(prefix='lt_video_')
         try:
@@ -77,8 +76,7 @@ class VideoExportService:
                 })
 
             if not segments:
-                logger.error(f"No valid segments for story {story.id}")
-                return None
+                raise RuntimeError(f"No valid segments — could not download any page image for story {story.id}")
 
             # 2. Create per-page video clips
             clip_paths = []
@@ -89,14 +87,14 @@ class VideoExportService:
                     clip_paths.append(clip_path)
 
             if not clip_paths:
-                return None
+                raise RuntimeError("No page clips produced — ffmpeg likely failed (is it installed? check nixpacks.toml)")
 
             # 3. Concatenate all clips
             concat_path = os.path.join(tmpdir, 'concat.mp4')
             self._concat_clips(clip_paths, concat_path, tmpdir)
 
             if not os.path.exists(concat_path):
-                return None
+                raise RuntimeError("concat step failed — ffmpeg concat produced no file")
 
             # 4. Add BGM if requested
             if bgm_track and bgm_track in self.BGM_FILES:
