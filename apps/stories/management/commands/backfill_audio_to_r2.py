@@ -57,19 +57,22 @@ def _local_path_for(url: str) -> str:
     return os.path.join(settings.MEDIA_ROOT, rel)
 
 
+PROD_MEDIA_BASE = 'https://api.littletales.app'
+
+
 def _read_bytes(url: str):
     """Try local disk first, then HTTP fetch. Returns bytes or None."""
     local = _local_path_for(url)
     if os.path.exists(local):
         with open(local, 'rb') as f:
             return f.read(), 'local'
-    if url.startswith('http'):
-        try:
-            r = requests.get(url, timeout=30)
-            if r.status_code == 200 and r.content:
-                return r.content, 'http'
-        except Exception:
-            pass
+    fetch_url = url if url.startswith('http') else f'{PROD_MEDIA_BASE}{url}'
+    try:
+        r = requests.get(fetch_url, timeout=30)
+        if r.status_code == 200 and r.content:
+            return r.content, 'http'
+    except Exception:
+        pass
     return None, None
 
 
