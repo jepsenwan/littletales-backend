@@ -592,17 +592,25 @@ class ImageGenerationService:
     )
 
     def generate_vocab_illustrations(self, story_id, words):
-        """Generate grid illustrations for vocabulary words."""
+        """Generate grid illustrations for vocabulary words.
+
+        Cap each batch at 4 words (2x2 grid). Larger grids (3x3 / 4x4)
+        are unreliable: the upstream model often paints fewer panels than
+        requested, so a request for 8 words ends up with two of them
+        painted side-by-side inside what we treat as a single cell —
+        producing the cropped/duplicated flashcards users have reported.
+        """
         if not words:
             return {}
 
+        BATCH_SIZE = 4
         result = {}
-        for batch_start in range(0, len(words), 16):
-            batch = words[batch_start:batch_start + 16]
+        for batch_start in range(0, len(words), BATCH_SIZE):
+            batch = words[batch_start:batch_start + BATCH_SIZE]
             batch_result = self._generate_vocab_batch(story_id, batch)
             result.update(batch_result)
-            if batch_start + 16 < len(words):
-                time.sleep(3)
+            if batch_start + BATCH_SIZE < len(words):
+                time.sleep(2)
 
         return result
 
