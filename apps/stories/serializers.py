@@ -38,6 +38,7 @@ class StorySerializer(serializers.ModelSerializer):
             'id', 'title', 'moral', 'goodnight_message', 'age_group', 'story_type', 'language',
             'status', 'created_by', 'child_profile', 'child_profile_name', 'thumbnail_url',
             'share_code', 'is_public', 'moderation_status', 'published_at',
+            'video_url', 'video_exported_at',
             'created_at', 'updated_at', 'pages',
         ]
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
@@ -57,6 +58,7 @@ class StoryListSerializer(serializers.ModelSerializer):
             'status', 'thumbnail_url', 'is_favorite', 'last_played_at',
             'created_at', 'created_by', 'created_by_name',
             'is_public', 'moderation_status', 'based_on', 'child_name', 'problem_hint',
+            'video_url',
         ]
 
     def get_is_favorite(self, obj):

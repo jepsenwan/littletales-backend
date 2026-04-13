@@ -218,6 +218,8 @@ class Story(models.Model):
     )
     is_public = models.BooleanField(default=False, help_text='Visible on Discover page')
     published_at = models.DateTimeField(null=True, blank=True)
+    video_url = models.URLField(blank=True, default='', help_text='R2 URL of exported MP4 if generated')
+    video_exported_at = models.DateTimeField(null=True, blank=True)
     moderation_status = models.CharField(
         max_length=20, choices=MODERATION_STATUS_CHOICES, default='not_requested',
     )

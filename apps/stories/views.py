@@ -1193,6 +1193,10 @@ def export_video(request, pk):
         return Response({'error': f'Video export failed: {type(e).__name__}: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     if video_url:
+        from django.utils import timezone as _tz
+        story.video_url = video_url
+        story.video_exported_at = _tz.now()
+        story.save(update_fields=['video_url', 'video_exported_at'])
         return Response({'video_url': video_url})
     return Response({'error': 'Video export failed: empty result'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
