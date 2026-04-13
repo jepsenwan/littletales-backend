@@ -1,37 +1,73 @@
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from celery import shared_task
+from django.db import close_old_connections
 from .models import Story, StoryPage, StoryAudio, GenerationJob, ChildProfile
 
 logger = logging.getLogger(__name__)
 
 
+def _run_phase(name, func, *args):
+    """Run a pipeline phase in a worker thread.
+
+    Closes the thread-local DB connection afterwards so Django doesn't leak
+    connections from the Celery worker process.
+    """
+    try:
+        func(*args)
+    except Exception as e:
+        logger.exception(f"Phase {name} failed: {e}")
+        raise
+    finally:
+        close_old_connections()
+
+
 @shared_task(bind=True, max_retries=1)
 def run_story_generation_pipeline(self, job_id, params):
     """
-    Main pipeline: text → images → audio.
-    Runs as a single Celery task with progress updates.
+    Main pipeline: text first, then images/coloring/audio/quiz/vocab in parallel.
+    All post-text phases only depend on the story text/pages, so they can run
+    concurrently. Network IO bound (external APIs + R2), so threads give a
+    real speedup.
     """
     try:
         job = GenerationJob.objects.get(id=job_id)
         story = job.story
 
-        # Phase 1: Generate story text
+        # Phase 1: Generate story text (must finish first — all downstream
+        # phases read the pages it creates).
         _generate_text(job, story, params)
 
-        # Phase 2: Generate images
-        _generate_images(job, story)
+        # Phases 2-5 run concurrently.
+        job.status = 'generating_assets'
+        job.progress = 20
+        job.save(update_fields=['status', 'progress'])
 
-        # Phase 2c: Generate coloring pages
-        _generate_coloring_pages(job, story)
+        phases = [
+            ('images', _generate_images, job, story),
+            ('coloring', _generate_coloring_pages, job, story),
+            ('audio', _generate_audio, job, story),
+            ('quiz', _generate_quiz, job, story),
+            ('vocab', _generate_vocab_illustrations, job, story),
+        ]
 
-        # Phase 3: Generate audio
-        _generate_audio(job, story)
+        failures = []
+        with ThreadPoolExecutor(max_workers=len(phases)) as executor:
+            future_to_name = {
+                executor.submit(_run_phase, name, func, *rest): name
+                for (name, func, *rest) in phases
+            }
+            for future in as_completed(future_to_name):
+                name = future_to_name[future]
+                exc = future.exception()
+                if exc is not None:
+                    failures.append((name, exc))
 
-        # Phase 4: Generate quiz
-        _generate_quiz(job, story)
-
-        # Phase 5: Generate vocabulary illustrations
-        _generate_vocab_illustrations(job, story)
+        # Images must succeed — it's the core deliverable. Other phases
+        # (quiz, vocab illustrations, coloring) are enhancements.
+        critical_failed = any(n == 'images' or n == 'audio' for n, _ in failures)
+        if critical_failed:
+            raise RuntimeError(f"Critical phase(s) failed: {[n for n, _ in failures]}")
 
         # Done
         story.status = 'completed'
@@ -141,8 +177,8 @@ def _generate_text(job, story, params):
 
 def _generate_images(job, story):
     """Phase 2: Generate images using 4-panel mode (1 API call per 4 pages)."""
-    job.status = 'generating_images'
-    job.save()
+    # Status/progress are set coarsely by the pipeline; per-phase progress
+    # updates still happen below (scoped saves to avoid thread stomps).
 
     from .services.image_generation import ImageGenerationService
     service = ImageGenerationService()
@@ -175,7 +211,7 @@ def _generate_images(job, story):
             for p in batch:
                 if p.page_number in result_map:
                     p.image_url = result_map[p.page_number]
-                    p.save()
+                    p.save(update_fields=['image_url'])
                 else:
                     # Fallback: generate individually for failed panels
                     _time.sleep(3)
@@ -183,7 +219,7 @@ def _generate_images(job, story):
                     api_calls += 1
                     if url:
                         p.image_url = url
-                        p.save()
+                        p.save(update_fields=['image_url'])
 
             generated += batch_size
             i += batch_size
@@ -194,13 +230,13 @@ def _generate_images(job, story):
             api_calls += 1
             if url:
                 page.image_url = url
-                page.save()
+                page.save(update_fields=['image_url'])
             generated += 1
             i += 1
 
         progress = 20 + int(generated / total_pages * 40)
         job.progress = progress
-        job.save()
+        job.save(update_fields=['progress'])
 
     logger.info(f"Images generated: story={story.id}, {total_pages} pages in {api_calls} API calls")
 
@@ -260,8 +296,6 @@ def _generate_coloring_pages(job, story):
 
 def _generate_audio(job, story):
     """Phase 3: Generate narration audio for each page."""
-    job.status = 'generating_audio'
-    job.save()
 
     from .services.audio_generation import AudioGenerationService
     service = AudioGenerationService()
@@ -301,15 +335,13 @@ def _generate_audio(job, story):
 
         progress = 60 + int((i + 1) / total_pages * 35)
         job.progress = progress
-        job.save()
+        job.save(update_fields=['progress'])
 
     logger.info(f"Audio generated: story={story.id}, voice={voice}")
 
 
 def _generate_quiz(job, story):
     """Phase 4: Generate comprehension quiz with read-aloud audio."""
-    job.progress = 96
-    job.save()
 
     from .services.quiz_generation import generate_quiz
     from .models import StoryQuiz
@@ -365,8 +397,6 @@ def _generate_quiz_audio(story, questions):
 
 def _generate_vocab_illustrations(job, story):
     """Phase 5: Generate cute illustrations for vocabulary flashcards."""
-    job.progress = 98
-    job.save()
 
     from .services.image_generation import ImageGenerationService
 
