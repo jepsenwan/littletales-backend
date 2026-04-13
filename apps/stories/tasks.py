@@ -7,11 +7,12 @@ from .models import Story, StoryPage, StoryAudio, GenerationJob, ChildProfile
 
 logger = logging.getLogger(__name__)
 
-# Phases run in parallel after text; progress is driven by how many of
-# them have completed, not by each phase computing its own slice.
-# Starting point (after text): 20%. Each phase completion: +16%. Final: 100%.
+# Post-text phases in the MAIN pipeline: images + audio + quiz = 3 phases.
+# Coloring pages and vocab illustrations are deferred to a background task
+# (they aren't needed for playback — user can open the story immediately).
+# Starting point (after text): 20%. Each phase completion: +25%.
 _PHASE_PROGRESS_START = 20
-_PHASE_PROGRESS_PER = 16
+_PHASE_PROGRESS_PER = 25
 
 
 def _run_phase(name, func, on_done, *args):
@@ -56,12 +57,12 @@ def run_story_generation_pipeline(self, job_id, params):
         job.progress = _PHASE_PROGRESS_START
         job.save(update_fields=['status', 'progress'])
 
+        # Only playback-critical phases in the main pipeline. Coloring and
+        # vocab illustrations are fired off as a deferred task below.
         phases = [
             ('images', _generate_images, job, story),
-            ('coloring', _generate_coloring_pages, job, story),
             ('audio', _generate_audio, job, story),
             ('quiz', _generate_quiz, job, story),
-            ('vocab', _generate_vocab_illustrations, job, story),
         ]
 
         # Monotonic progress: single writer, never decreases. Per-phase code
@@ -108,13 +109,20 @@ def run_story_generation_pipeline(self, job_id, params):
         if critical_failed:
             raise RuntimeError(f"Critical phase(s) failed: {[(n, str(e)) for n, e in failures]}")
 
-        # Done
+        # Main pipeline done — user can open + play the story now.
         story.status = 'completed'
         story.save()
         job.status = 'completed'
         job.progress = 100
         job.save()
         logger.info(f"Story generation completed: job={job_id}, story={story.id}")
+
+        # Kick off deferred assets (coloring pages + vocab illustrations).
+        # Fire-and-forget: failures here don't roll back the main story.
+        try:
+            run_deferred_assets.delay(story.id)
+        except Exception as e:
+            logger.warning(f"Failed to dispatch deferred assets for story {story.id}: {e}")
 
     except Exception as e:
         logger.error(f"Story generation failed: job={job_id}, error={e}")
@@ -134,6 +142,54 @@ def run_story_generation_pipeline(self, job_id, params):
         except Exception:
             pass
         raise
+
+
+@shared_task(bind=True, max_retries=1)
+def run_deferred_assets(self, story_id):
+    """Generate coloring pages + vocab illustrations after the main pipeline.
+
+    These aren't needed to play the story, so they're decoupled: the user
+    opens the story as soon as images/audio/quiz are ready, and these
+    assets stream in behind the scenes. Frontend reads
+    `story.deferred_assets_status` to show "still creating" placeholders.
+    """
+    try:
+        story = Story.objects.get(id=story_id)
+    except Story.DoesNotExist:
+        logger.warning(f"run_deferred_assets: story {story_id} not found")
+        return
+
+    Story.objects.filter(id=story_id).update(deferred_assets_status='running')
+
+    phases = [
+        ('coloring', _generate_coloring_pages),
+        ('vocab', _generate_vocab_illustrations),
+    ]
+    failures = []
+    # Same bounded concurrency as the main pipeline so they don't serialize.
+    with ThreadPoolExecutor(max_workers=len(phases)) as executor:
+        future_to_name = {
+            executor.submit(_run_phase, name, func, lambda _n: None, None, story): name
+            for (name, func) in phases
+        }
+        try:
+            for future in as_completed(future_to_name, timeout=600):
+                name = future_to_name[future]
+                exc = future.exception()
+                if exc is not None:
+                    failures.append((name, exc))
+        except TimeoutError:
+            for future, name in future_to_name.items():
+                if not future.done():
+                    failures.append((name, TimeoutError(f'{name} exceeded 600s')))
+                    future.cancel()
+
+    new_status = 'failed' if failures else 'completed'
+    Story.objects.filter(id=story_id).update(deferred_assets_status=new_status)
+    if failures:
+        logger.error(f"Deferred assets failures for story {story_id}: {[(n, str(e)) for n, e in failures]}")
+    else:
+        logger.info(f"Deferred assets completed for story {story_id}")
 
 
 def _generate_text(job, story, params):

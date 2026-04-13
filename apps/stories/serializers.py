@@ -37,7 +37,8 @@ class StorySerializer(serializers.ModelSerializer):
         model = Story
         fields = [
             'id', 'title', 'moral', 'goodnight_message', 'age_group', 'story_type', 'language',
-            'status', 'created_by', 'child_profile', 'child_profile_name', 'thumbnail_url',
+            'status', 'deferred_assets_status',
+            'created_by', 'child_profile', 'child_profile_name', 'thumbnail_url',
             'share_code', 'is_public', 'moderation_status', 'published_at',
             'video_url', 'video_exported_at',
             'created_at', 'updated_at', 'pages',

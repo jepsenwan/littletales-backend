@@ -227,6 +227,18 @@ class Story(models.Model):
     series = models.ForeignKey(
         'StorySeries', on_delete=models.SET_NULL, null=True, blank=True, related_name='stories'
     )
+    # Coloring pages + vocab illustrations aren't needed for playback, so they
+    # run as a deferred background task after the main pipeline finishes.
+    DEFERRED_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('running', 'Running'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ]
+    deferred_assets_status = models.CharField(
+        max_length=20, choices=DEFERRED_STATUS_CHOICES, default='pending',
+        help_text='State of the deferred coloring/vocab asset generation.',
+    )
     episode_number = models.PositiveIntegerField(default=0, help_text='0 = standalone, 1+ = series episode')
     last_played_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
