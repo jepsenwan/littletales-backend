@@ -17,6 +17,25 @@ from .serializers import (
 )
 
 
+def _family_user_ids(user):
+    """Return the set of user IDs that should be treated as 'me' for the
+    purposes of shared family content (collections, etc.). Always includes
+    the requesting user; adds anyone in the same family/families.
+    """
+    from apps.users.models import FamilyMember
+    family_ids = list(
+        FamilyMember.objects.filter(user=user).values_list('family_id', flat=True)
+    )
+    if not family_ids:
+        return [user.id]
+    ids = set(
+        FamilyMember.objects.filter(family_id__in=family_ids)
+        .values_list('user_id', flat=True)
+    )
+    ids.add(user.id)
+    return list(ids)
+
+
 def _child_profiles_for(user):
     """Return ChildProfiles the user can see:
     - Own (user=me)
@@ -748,7 +767,11 @@ class StoryCollectionListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return StoryCollection.objects.filter(user=self.request.user)
+        # Surface collections from anyone in my family so a spouse who
+        # joins later sees the shelves I built up.
+        return StoryCollection.objects.filter(
+            user_id__in=_family_user_ids(self.request.user)
+        )
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -758,7 +781,9 @@ class StoryCollectionDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return StoryCollection.objects.filter(user=self.request.user)
+        return StoryCollection.objects.filter(
+            user_id__in=_family_user_ids(self.request.user)
+        )
 
     def get_serializer_class(self):
         if self.request.method == 'GET':
@@ -776,7 +801,9 @@ class StoryCollectionDetailView(generics.RetrieveUpdateDestroyAPIView):
 def collection_add_story(request, pk):
     """Add a story to a collection."""
     try:
-        collection = StoryCollection.objects.get(id=pk, user=request.user)
+        collection = StoryCollection.objects.get(
+            id=pk, user_id__in=_family_user_ids(request.user)
+        )
     except StoryCollection.DoesNotExist:
         return Response({'error': 'Collection not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -785,7 +812,9 @@ def collection_add_story(request, pk):
         return Response({'error': 'story_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        story = Story.objects.get(id=story_id, created_by=request.user)
+        story = Story.objects.get(
+            id=story_id, created_by_id__in=_family_user_ids(request.user)
+        )
     except Story.DoesNotExist:
         return Response({'error': 'Story not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -798,7 +827,9 @@ def collection_add_story(request, pk):
 def collection_remove_story(request, pk):
     """Remove a story from a collection."""
     try:
-        collection = StoryCollection.objects.get(id=pk, user=request.user)
+        collection = StoryCollection.objects.get(
+            id=pk, user_id__in=_family_user_ids(request.user)
+        )
     except StoryCollection.DoesNotExist:
         return Response({'error': 'Collection not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -814,7 +845,9 @@ def collection_remove_story(request, pk):
 @permission_classes([IsAuthenticated])
 def story_collections_for_story(request, pk):
     """Get which collections a story belongs to."""
-    collections = StoryCollection.objects.filter(user=request.user, stories__id=pk)
+    collections = StoryCollection.objects.filter(
+        user_id__in=_family_user_ids(request.user), stories__id=pk
+    )
     serializer = StoryCollectionSerializer(collections, many=True)
     return Response(serializer.data)
 
@@ -826,7 +859,9 @@ class VocabCollectionListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return VocabCollection.objects.filter(user=self.request.user)
+        return VocabCollection.objects.filter(
+            user_id__in=_family_user_ids(self.request.user)
+        )
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -836,7 +871,9 @@ class VocabCollectionDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return VocabCollection.objects.filter(user=self.request.user)
+        return VocabCollection.objects.filter(
+            user_id__in=_family_user_ids(self.request.user)
+        )
 
     def get_serializer_class(self):
         if self.request.method == 'GET':
@@ -852,7 +889,9 @@ def vocab_collection_add_word(request, pk):
     Body: { story_id, page_number, word }
     """
     try:
-        collection = VocabCollection.objects.get(id=pk, user=request.user)
+        collection = VocabCollection.objects.get(
+            id=pk, user_id__in=_family_user_ids(request.user)
+        )
     except VocabCollection.DoesNotExist:
         return Response({'error': 'Collection not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -894,7 +933,9 @@ def vocab_collection_remove_word(request, pk):
     Body: { item_id }  OR  { story_id, page_number, word }
     """
     try:
-        collection = VocabCollection.objects.get(id=pk, user=request.user)
+        collection = VocabCollection.objects.get(
+            id=pk, user_id__in=_family_user_ids(request.user)
+        )
     except VocabCollection.DoesNotExist:
         return Response({'error': 'Collection not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -930,13 +971,14 @@ def vocab_collections_for_word(request):
     word = request.query_params.get('word')
     if not story_id or page_number is None or not word:
         return Response([])
+    fam_ids = _family_user_ids(request.user)
     ids = VocabCollectionItem.objects.filter(
-        collection__user=request.user,
+        collection__user_id__in=fam_ids,
         story_id=story_id,
         page_number=page_number,
         word=word,
     ).values_list('collection_id', flat=True)
-    cols = VocabCollection.objects.filter(user=request.user, id__in=list(ids))
+    cols = VocabCollection.objects.filter(user_id__in=fam_ids, id__in=list(ids))
     return Response(VocabCollectionSerializer(cols, many=True).data)
 
 
