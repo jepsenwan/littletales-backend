@@ -132,15 +132,23 @@ CRITICAL rules for gender and personality:
 - Instead, SHOW growth through actions and events (e.g., the character makes a new friend, showing they overcame shyness)
 - The story should address the child's situation through metaphor and plot, NOT by naming the traits
 
-Rules for vocabulary:
+Rules for vocabulary (THIS IS AN EDUCATIONAL PRODUCT — DIFFICULTY MUST BE STRICTLY AGE-MATCHED):
 - Each page should have 2-3 vocabulary words appropriate for the child's age level
-- For ages 3-5: pick simple but useful words (nouns, basic adjectives, action verbs)
-- For ages 5-7: pick slightly more advanced words (emotions, descriptive adjectives, compound words)
-- For Chinese stories: pick individual characters (字) or short words (词) worth learning
-- For English stories: pick whole words
-- Each vocabulary entry needs: the word exactly as it appears in the text, a simple one-sentence definition a child can understand, and a relevant emoji
-- Choose words that appear in the page text and are good for the child to learn and remember
-- SAFETY: NEVER pick words related to violence, weapons, death, fear, horror, darkness, blood, or anything scary/inappropriate for children. Only pick positive, educational, neutral, or nature-related words (animals, colors, emotions like happy/brave/kind, objects, actions like run/jump/share)
+- Difficulty MUST advance meaningfully with age. NEVER give a 10-year-old words a 4-year-old already knows (cat/dog/eat). NEVER give a 3-year-old abstract words like "resilience" or 成语. Treat this as a hard constraint — the vocabulary list is the learning payload of the story.
+
+Age-bracket requirements (pick ONLY from the appropriate tier):
+- Ages 1-3 (pre-reader, ~50-200 word vocabulary): concrete high-frequency nouns only — common animals, body parts, everyday household objects, primary colors, basic actions (eat/sleep/run/jump), and onomatopoeia (汪汪/喵/woof/meow). NO abstract concepts, NO multi-character Chinese 词, NO emotions beyond happy/sad.
+- Ages 3-5 (preschool, CEFR Pre-A1 / HSK 1 equivalent): simple concrete nouns, basic adjectives (big/small/hot/cold/fast/slow), common action verbs, family/weather/food/time words. Chinese: single 字 or the most basic 两字词 (朋友, 下雨, 高兴). English: one-syllable or short two-syllable words.
+- Ages 5-7 (early reader, CEFR A1 / HSK 2): emotion words (excited, proud, worried, 兴奋, 勇敢), descriptive adjectives (sparkly, cozy, 安静, 温暖), compound words, simple opposites, verbs with nuance (whisper, giggle, stumble, 悄悄, 咯咯笑). Introduce simple 两字词 and very basic 成语 (一心一意). NOT acceptable: re-using 1-3 bracket words like "cat" or "eat".
+- Ages 8-10 (intermediate reader, CEFR A2-B1 / HSK 3-4): multi-syllable words, less common adjectives/adverbs, vivid verbs (trudge, marvel, hesitate, 犹豫, 观察), abstract nouns (courage, patience, friendship, 友谊, 勇气), common 四字成语 (小心翼翼, 目不转睛, 迫不及待), simple idioms. Require at least one 成语 per page for Chinese stories. NOT acceptable: concrete basic nouns already known at age 5.
+- Ages 11-12 (advanced reader, CEFR B1-B2 / HSK 4-5): mature/literary vocabulary, advanced synonyms, figurative language (metaphor/simile targets), nuanced emotions (reluctance, empathy, resilience, melancholy, 踌躇, 豁然开朗), rarer 成语 and 书面语 (跃跃欲试, 恍然大悟, 不以为然), words a strong middle-school reader meets in novels. Require at least one 四字成语 or literary expression per page. NOT acceptable: any word already taught in younger tiers.
+
+Format & safety:
+- For Chinese stories: ages 1-5 pick single 字 or the most basic 两字词; ages 5-7 mostly 两字词; ages 8+ MUST favor 两字书面词 and 四字成语 over single 字. Never pick punctuation or particles (的/了/吗).
+- For English stories: always pick whole words, never individual letters, never filler words (the/a/is).
+- Each vocabulary entry needs: the word exactly as it appears in the text, a simple one-sentence definition a child can understand (phrased at or slightly below the child's level), and a relevant emoji.
+- Choose words that actually appear in this page's text AND are genuinely worth learning at this age (i.e. the child probably doesn't know them yet but will encounter them again).
+- SAFETY: NEVER pick words related to violence, weapons, death, fear, horror, darkness, blood, or anything scary/inappropriate for children. Only pick positive, educational, neutral, or nature-related words.
 
 Other important rules:
 - image_prompt MUST always be in English regardless of story language
