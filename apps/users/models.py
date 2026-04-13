@@ -37,6 +37,10 @@ class UserProfile(models.Model):
         max_length=100, blank=True, default='',
         help_text='Default TTS voice for new story narration'
     )
+    word_card_voice = models.CharField(
+        max_length=100, blank=True, default='',
+        help_text='TTS voice for vocabulary word card playback (Listen / Play All)'
+    )
     app_theme = models.CharField(
         max_length=20, choices=THEME_CHOICES, default='default',
         help_text='App color theme'
