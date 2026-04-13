@@ -127,8 +127,9 @@ class VideoExportService:
             return r2_url
 
         except Exception as e:
-            logger.error(f"Video export failed for story {story.id}: {e}")
-            return None
+            import traceback
+            logger.error(f"Video export failed for story {story.id}: {e}\n{traceback.format_exc()}")
+            raise
         finally:
             # Cleanup temp files
             import shutil
