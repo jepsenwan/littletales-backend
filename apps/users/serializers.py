@@ -67,7 +67,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserProfile
-        fields = ['user', 'user_type', 'age_group', 'actual_age', 'avatar', 'favorite_themes', 'quiz_voice', 'app_theme', 'created_at']
+        fields = ['user', 'user_type', 'age_group', 'actual_age', 'avatar', 'favorite_themes', 'quiz_voice', 'default_narrator_voice', 'app_theme', 'created_at']
 
     def update(self, instance, validated_data):
         # Handle nested user data if present

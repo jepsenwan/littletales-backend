@@ -33,6 +33,10 @@ class UserProfile(models.Model):
         max_length=100, blank=True, default='',
         help_text='TTS voice ID for reading quiz questions aloud'
     )
+    default_narrator_voice = models.CharField(
+        max_length=100, blank=True, default='',
+        help_text='Default TTS voice for new story narration'
+    )
     app_theme = models.CharField(
         max_length=20, choices=THEME_CHOICES, default='default',
         help_text='App color theme'
