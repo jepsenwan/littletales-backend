@@ -4,6 +4,8 @@ import logging
 import requests
 from django.conf import settings
 
+from .r2_storage import upload_to_r2
+
 logger = logging.getLogger(__name__)
 
 
@@ -29,14 +31,21 @@ class AudioGenerationService:
             if not audio_bytes:
                 return '', 0
 
-            # Save locally
-            media_dir = os.path.join(settings.MEDIA_ROOT, 'stories', str(story_id))
-            os.makedirs(media_dir, exist_ok=True)
-            filename = f"audio_page_{page_number}_narration.mp3"
-            filepath = os.path.join(media_dir, filename)
-            with open(filepath, 'wb') as f:
-                f.write(audio_bytes)
-            public_url = f"{settings.MEDIA_URL}stories/{story_id}/{filename}"
+            # Upload to R2 (mobile browsers were rejecting the previous
+            # /media/ URL served from Railway with MEDIA_ERR_SRC_NOT_SUPPORTED;
+            # going through R2 + CDN gives a clean audio/mpeg response).
+            r2_path = f"stories/{story_id}/audio_page_{page_number}_narration.mp3"
+            try:
+                public_url = upload_to_r2(audio_bytes, r2_path, content_type='audio/mpeg')
+            except Exception as e:
+                logger.error(f"R2 upload failed for story {story_id} p{page_number}: {e}")
+                # Fall back to local disk so something still plays in dev.
+                media_dir = os.path.join(settings.MEDIA_ROOT, 'stories', str(story_id))
+                os.makedirs(media_dir, exist_ok=True)
+                filename = f"audio_page_{page_number}_narration.mp3"
+                with open(os.path.join(media_dir, filename), 'wb') as f:
+                    f.write(audio_bytes)
+                public_url = f"{settings.MEDIA_URL}stories/{story_id}/{filename}"
 
             # Estimate duration (~16kbps for mp3 speech)
             estimated_duration = max(3, len(audio_bytes) / 2000)
