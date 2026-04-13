@@ -16,6 +16,10 @@ STYLE_PREFIX = (
     "gentle lighting, storybook aesthetic. "
     "IMPORTANT: Do NOT include any text, words, letters, or writing in the image. "
     "No speech bubbles, no captions, no signs with text. Pure illustration only. "
+    "FRAMING: Show every character FULLY within the frame — include the entire head "
+    "and body, never crop or cut off faces/heads/limbs. Keep a safe margin around "
+    "the subjects so nothing touches the edges. Medium wide shot, characters "
+    "centered in the composition. "
 )
 
 COLORING_PREFIX = (
