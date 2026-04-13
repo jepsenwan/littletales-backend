@@ -200,7 +200,7 @@ class VideoExportService:
                 safe_srt = srt_path.replace("'", "'\\''").replace(':', '\\:')
                 vf_parts.append(
                     f"subtitles='{safe_srt}'"
-                    f":force_style='FontName=Hiragino Sans GB,FontSize=22,PrimaryColour=&Hffffff,OutlineColour=&H000000,Outline=2,MarginV=30'"
+                    f":force_style='FontName=Hiragino Sans GB,FontSize=12,PrimaryColour=&Hffffff,OutlineColour=&H000000,Outline=1,Shadow=1,MarginV=50,Bold=0'"
                 )
 
             vf = ','.join(vf_parts)
