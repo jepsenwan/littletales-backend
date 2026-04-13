@@ -1,4 +1,6 @@
 [phases.setup]
-# Extend the default nix packages with ffmpeg. The '...' keeps the defaults
-# (Python, pip, etc.) and appends ours.
-nixPkgs = ['...', 'ffmpeg']
+# Extend the default nix packages. The '...' keeps defaults (Python, pip, etc).
+# - ffmpeg: required for video export
+# - pkg-config, libmysqlclient: build-deps for mysqlclient wheel
+# - openssl, rustc, cargo: build-deps for cryptography wheel
+nixPkgs = ['...', 'ffmpeg', 'pkg-config', 'libmysqlclient', 'openssl', 'rustc', 'cargo']
