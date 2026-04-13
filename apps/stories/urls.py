@@ -23,6 +23,7 @@ urlpatterns = [
     path('voices/clone/', views.clone_voice, name='clone-voice'),
     path('voices/clone/<int:voice_id>/status/', views.clone_voice_status, name='clone-voice-status'),
     path('reading-stats/', views.reading_stats, name='reading-stats'),
+    path('reading-minutes/', views.report_reading_minutes, name='report-reading-minutes'),
     path('story-of-the-day/', views.story_of_the_day, name='story-of-the-day'),
     # Collections
     path('collections/', views.StoryCollectionListCreateView.as_view(), name='collection-list'),

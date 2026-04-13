@@ -359,11 +359,30 @@ def mark_played(request, pk):
     story.last_played_at = timezone.now()
     story.save(update_fields=['last_played_at'])
 
-    # Update reading streak
+    # Update story count + streak only. Reading minutes are now reported
+    # separately (see report_reading_minutes) based on actual playback.
     stats, _ = ReadingStats.objects.get_or_create(user=request.user)
-    stats.record_read(minutes=request.data.get('minutes', 5))
+    stats.record_open()
 
     return Response({'status': 'ok'})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def report_reading_minutes(request):
+    """Called by the player every minute of actual playback.
+
+    Body: { minutes: 1 }
+    """
+    try:
+        minutes = int(request.data.get('minutes', 0))
+    except (TypeError, ValueError):
+        minutes = 0
+    # Clamp so a misbehaving client can't inflate totals.
+    minutes = max(0, min(minutes, 5))
+    stats, _ = ReadingStats.objects.get_or_create(user=request.user)
+    stats.add_minutes(minutes)
+    return Response({'status': 'ok', 'total_reading_minutes': stats.total_reading_minutes})
 
 
 @api_view(['GET'])

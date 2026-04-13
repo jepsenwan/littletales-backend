@@ -387,18 +387,18 @@ class ReadingStats(models.Model):
     # Monthly breakdown stored as JSON: {"2026-04": 12, "2026-03": 8}
     monthly_reads = models.JSONField(default=dict, blank=True)
 
-    def record_read(self, minutes=0):
-        """Call when a story is played/read. Updates streak + counters."""
+    def record_open(self):
+        """Call when a story is opened. Bumps the story count + streak.
+
+        Reading minutes are tracked separately via add_minutes() so this
+        doesn't inflate time just because someone opened the story page.
+        """
         today = date.today()
         month_key = today.strftime('%Y-%m')
 
         self.total_stories_read += 1
-        self.total_reading_minutes += minutes
-
-        # Update monthly
         self.monthly_reads[month_key] = self.monthly_reads.get(month_key, 0) + 1
 
-        # Update streak
         if self.last_read_date is None:
             self.current_streak = 1
         elif self.last_read_date == today:
@@ -411,6 +411,21 @@ class ReadingStats(models.Model):
         self.last_read_date = today
         self.longest_streak = max(self.longest_streak, self.current_streak)
         self.save()
+
+    def add_minutes(self, minutes: int):
+        """Add actual listening/reading time. Called periodically by the
+        player while audio is playing — not on every page open."""
+        if minutes <= 0:
+            return
+        self.total_reading_minutes += minutes
+        self.save(update_fields=['total_reading_minutes'])
+
+    # Back-compat shim: old callers that pass minutes together with
+    # opening the story still work, but the default is now 0 minutes.
+    def record_read(self, minutes: int = 0):
+        self.record_open()
+        if minutes:
+            self.add_minutes(minutes)
 
     def __str__(self):
         return f"{self.user.username}: {self.current_streak}-day streak"
