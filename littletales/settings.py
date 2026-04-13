@@ -47,6 +47,7 @@ THIRD_PARTY_APPS = [
     'allauth.account',
     'allauth.socialaccount',
     'allauth.socialaccount.providers.google',
+    'anymail',
 ]
 
 LOCAL_APPS = [
@@ -273,17 +274,14 @@ SOCIALACCOUNT_AUTO_SIGNUP = True
 SOCIALACCOUNT_EMAIL_VERIFICATION = 'none'
 SOCIALACCOUNT_LOGIN_ON_GET = True
 
-# Email settings for verification (using console backend for development)
-# Email Configuration
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'  # This is the SMTP server for Gmail
-EMAIL_USE_TLS = True           # Gmail requires TLS
-EMAIL_PORT = 587               # Standard port for SMTP with TLS
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'pivot.cs.project@gmail.com')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', 'pghvqicwwtowuijr')
-EMAIL_TIMEOUT = 180
-DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
-ACCOUNT_EMAIL_SUBJECT_PREFIX = '[Twinkle Twinkle] '
+# Email — Resend (via django-anymail) for transactional mail
+EMAIL_BACKEND = 'anymail.backends.resend.EmailBackend'
+ANYMAIL = {
+    'RESEND_API_KEY': os.getenv('RESEND_API_KEY', ''),
+}
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'LittleTales <noreply@littletales.app>')
+EMAIL_TIMEOUT = 30
+ACCOUNT_EMAIL_SUBJECT_PREFIX = '[LittleTales] '
 
 # Google OAuth settings
 SOCIALACCOUNT_PROVIDERS = {
