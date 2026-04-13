@@ -200,11 +200,8 @@ def generate_story(request):
     # Resolve child info from profile or manual input
     child_profile = None
     if data.get('child_profile_id'):
-        try:
-            child_profile = ChildProfile.objects.get(
-                id=data['child_profile_id'], user=request.user
-            )
-        except ChildProfile.DoesNotExist:
+        child_profile = _child_profiles_for(request.user).filter(id=data['child_profile_id']).first()
+        if not child_profile:
             return Response({'error': 'Child profile not found'}, status=status.HTTP_404_NOT_FOUND)
         if child_profile.age is None:
             return Response({'error': 'Child profile missing birth_date'}, status=status.HTTP_400_BAD_REQUEST)
@@ -472,7 +469,7 @@ def story_of_the_day(request):
          'story_type': 'emotional', 'tags': ['shy', 'anxious']},
     ]
 
-    profiles = list(ChildProfile.objects.filter(user=request.user))
+    profiles = list(_child_profiles_for(request.user))
 
     if not profiles:
         # No children — return single generic recommendation
@@ -829,9 +826,8 @@ def generate_character(request, pk):
     """Generate character image from features.
     Body: {"features": {"gender":"girl","skin_tone":"medium",...}, "name": "Luna"}
     """
-    try:
-        child = ChildProfile.objects.get(id=pk, user=request.user)
-    except ChildProfile.DoesNotExist:
+    child = _child_profiles_for(request.user).filter(id=pk).first()
+    if not child:
         return Response({'error': 'Child profile not found'}, status=status.HTTP_404_NOT_FOUND)
 
     from .services.quota import check_and_increment_character_quota, refund_character_quota
@@ -871,9 +867,8 @@ def character_from_photo(request, pk):
     """Analyze a photo to extract features, then generate character.
     Body: {"photo_url": "https://..."} or multipart with 'photo' file.
     """
-    try:
-        child = ChildProfile.objects.get(id=pk, user=request.user)
-    except ChildProfile.DoesNotExist:
+    child = _child_profiles_for(request.user).filter(id=pk).first()
+    if not child:
         return Response({'error': 'Child profile not found'}, status=status.HTTP_404_NOT_FOUND)
 
     from .services.quota import check_and_increment_character_quota, refund_character_quota
@@ -944,7 +939,7 @@ def review_vocabulary(request, pk):
     child_profile_id = request.data.get('child_profile_id')
     child_profile = None
     if child_profile_id:
-        child_profile = ChildProfile.objects.filter(id=child_profile_id, user=request.user).first()
+        child_profile = _child_profiles_for(request.user).filter(id=child_profile_id).first()
 
     review, created = VocabularyReview.objects.get_or_create(
         user=request.user,
@@ -1016,7 +1011,7 @@ def submit_quiz(request, pk):
 
     child_profile = None
     if child_profile_id:
-        child_profile = ChildProfile.objects.filter(id=child_profile_id, user=request.user).first()
+        child_profile = _child_profiles_for(request.user).filter(id=child_profile_id).first()
 
     # Score
     score = 0
