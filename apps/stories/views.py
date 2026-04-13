@@ -233,8 +233,14 @@ def generate_story(request):
         data['child_name'] = child_profile.child_name
         data['age'] = child_profile.age
         data['gender'] = child_profile.gender
-        data['personality'] = child_profile.personality
-        data['personality_detail'] = child_profile.personality_detail
+        # Respect explicit choice from the form. If the user picked
+        # "Just tell a bedtime story" (personality empty), don't overwrite
+        # with the child's saved personality.
+        if not data.get('personality'):
+            data['personality'] = []
+            data['personality_detail'] = ''
+        if not data.get('personality_detail'):
+            data['personality_detail'] = ''
         if child_profile.character_description:
             data['character_description'] = child_profile.character_description
 
