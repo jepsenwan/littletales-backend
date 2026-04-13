@@ -1,4 +1,5 @@
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from celery import shared_task
 from django.db import close_old_connections
@@ -6,12 +7,20 @@ from .models import Story, StoryPage, StoryAudio, GenerationJob, ChildProfile
 
 logger = logging.getLogger(__name__)
 
+# Phases run in parallel after text; progress is driven by how many of
+# them have completed, not by each phase computing its own slice.
+# Starting point (after text): 20%. Each phase completion: +16%. Final: 100%.
+_PHASE_PROGRESS_START = 20
+_PHASE_PROGRESS_PER = 16
 
-def _run_phase(name, func, *args):
+
+def _run_phase(name, func, on_done, *args):
     """Run a pipeline phase in a worker thread.
 
-    Closes the thread-local DB connection afterwards so Django doesn't leak
-    connections from the Celery worker process.
+    Calls on_done() when the phase finishes so the parent can bump
+    progress atomically, regardless of which phase finished first.
+    Closes the thread-local DB connection afterwards so Django doesn't
+    leak connections from the Celery worker process.
     """
     try:
         func(*args)
@@ -19,6 +28,10 @@ def _run_phase(name, func, *args):
         logger.exception(f"Phase {name} failed: {e}")
         raise
     finally:
+        try:
+            on_done(name)
+        except Exception:
+            pass
         close_old_connections()
 
 
@@ -40,7 +53,7 @@ def run_story_generation_pipeline(self, job_id, params):
 
         # Phases 2-5 run concurrently.
         job.status = 'generating_assets'
-        job.progress = 20
+        job.progress = _PHASE_PROGRESS_START
         job.save(update_fields=['status', 'progress'])
 
         phases = [
@@ -51,23 +64,49 @@ def run_story_generation_pipeline(self, job_id, params):
             ('vocab', _generate_vocab_illustrations, job, story),
         ]
 
+        # Monotonic progress: single writer, never decreases. Per-phase code
+        # does NOT save progress itself anymore — that's what caused the
+        # "90% drops back to 40%" race.
+        progress_lock = threading.Lock()
+        completed_count = {'n': 0}
+
+        def on_phase_done(phase_name):
+            with progress_lock:
+                completed_count['n'] += 1
+                new_progress = _PHASE_PROGRESS_START + completed_count['n'] * _PHASE_PROGRESS_PER
+                # Fetch fresh to avoid overwriting unrelated fields.
+                GenerationJob.objects.filter(id=job.id).update(progress=new_progress)
+
+        # Per-phase watchdog: any phase that hasn't finished in PHASE_TIMEOUT
+        # seconds has its future cancelled so the whole story doesn't hang
+        # forever when an upstream image/audio API stalls.
+        PHASE_TIMEOUT = 600  # 10 minutes per phase; the whole story should
+                             # normally finish well under this budget.
+
         failures = []
         with ThreadPoolExecutor(max_workers=len(phases)) as executor:
             future_to_name = {
-                executor.submit(_run_phase, name, func, *rest): name
+                executor.submit(_run_phase, name, func, on_phase_done, *rest): name
                 for (name, func, *rest) in phases
             }
-            for future in as_completed(future_to_name):
-                name = future_to_name[future]
-                exc = future.exception()
-                if exc is not None:
-                    failures.append((name, exc))
+            try:
+                for future in as_completed(future_to_name, timeout=PHASE_TIMEOUT):
+                    name = future_to_name[future]
+                    exc = future.exception()
+                    if exc is not None:
+                        failures.append((name, exc))
+            except TimeoutError:
+                # Record any phase that didn't finish as a failure.
+                for future, name in future_to_name.items():
+                    if not future.done():
+                        failures.append((name, TimeoutError(f'{name} exceeded {PHASE_TIMEOUT}s')))
+                        future.cancel()
 
         # Images must succeed — it's the core deliverable. Other phases
         # (quiz, vocab illustrations, coloring) are enhancements.
         critical_failed = any(n == 'images' or n == 'audio' for n, _ in failures)
         if critical_failed:
-            raise RuntimeError(f"Critical phase(s) failed: {[n for n, _ in failures]}")
+            raise RuntimeError(f"Critical phase(s) failed: {[(n, str(e)) for n, e in failures]}")
 
         # Done
         story.status = 'completed'
@@ -234,9 +273,8 @@ def _generate_images(job, story):
             generated += 1
             i += 1
 
-        progress = 20 + int(generated / total_pages * 40)
-        job.progress = progress
-        job.save(update_fields=['progress'])
+        # Progress is managed by the parent pipeline (phase-completion
+        # based) — don't write here, it used to race with other phases.
 
     logger.info(f"Images generated: story={story.id}, {total_pages} pages in {api_calls} API calls")
 
@@ -333,9 +371,8 @@ def _generate_audio(job, story):
                     duration_seconds=duration,
                 )
 
-        progress = 60 + int((i + 1) / total_pages * 35)
-        job.progress = progress
-        job.save(update_fields=['progress'])
+        # Progress is managed by the parent pipeline (phase-completion
+        # based) — don't write here, it used to race with other phases.
 
     logger.info(f"Audio generated: story={story.id}, voice={voice}")
 
