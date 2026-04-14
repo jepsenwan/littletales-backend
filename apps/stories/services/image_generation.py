@@ -288,14 +288,73 @@ class ImageGenerationService:
 
     # ── Yunwu (primary) ──────────────────────────────────────────
 
+    # Gemini imageConfig params. "4K" forces 3840x2160 output; "16:9"
+    # keeps the aspect ratio correct for our quad-panel splitter.
+    GEMINI_ASPECT_RATIO = "16:9"
+    GEMINI_IMAGE_SIZE = "4K"
+
     def _yunwu_generate(self, prompt, size=None):
-        """
-        Generate image via Yunwu API using Gemini image model through chat/completions.
-        Tries each key in yunwu_api_keys in order; returns bytes on first success.
-        """
+        """Generate image via Yunwu. Routes to Gemini's native
+        generateContent endpoint (which supports aspectRatio +
+        imageSize=4K) when the configured model is a Gemini one,
+        otherwise falls back to the chat/completions wrapper."""
         if not self.yunwu_api_keys:
             return None
+        if self.yunwu_model.startswith('gemini'):
+            return self._yunwu_gemini_native(prompt)
+        return self._yunwu_chat_completions(prompt)
 
+    def _yunwu_gemini_native(self, prompt):
+        """Call Gemini's native :generateContent endpoint so we can
+        pass imageConfig = {aspectRatio: 16:9, imageSize: 4K}. The
+        OpenAI-style chat endpoint silently ignores these params.
+        """
+        # Strip /v1 from the base URL — the native endpoint is /v1beta/...
+        base = self.yunwu_base_url.rstrip('/')
+        if base.endswith('/v1'):
+            base = base[:-3]
+        url = f"{base}/v1beta/models/{self.yunwu_model}:generateContent"
+
+        payload = {
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "responseModalities": ["TEXT", "IMAGE"],
+                "imageConfig": {
+                    "aspectRatio": self.GEMINI_ASPECT_RATIO,
+                    "imageSize": self.GEMINI_IMAGE_SIZE,
+                },
+            },
+        }
+
+        for idx, key in enumerate(self.yunwu_api_keys, start=1):
+            headers = {
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            }
+            label = f"key#{idx}({key[:12]}...)"
+            try:
+                resp = requests.post(url, json=payload, headers=headers, timeout=300)
+                resp.raise_for_status()
+                body = resp.json()
+                for cand in (body.get("candidates") or []):
+                    for part in (cand.get("content") or {}).get("parts") or []:
+                        inline = part.get("inline_data") or part.get("inlineData")
+                        data = (inline or {}).get("data")
+                        if data:
+                            image_bytes = base64.b64decode(data)
+                            logger.info(f"[yunwu-gemini] {label} generated {len(image_bytes)} bytes (imageSize=4K)")
+                            return image_bytes
+                logger.warning(f"[yunwu-gemini] {label} no image in response, trying next key")
+            except Exception as e:
+                logger.warning(f"[yunwu-gemini] {label} failed: {e}, trying next key")
+
+        logger.error(f"[yunwu-gemini] all {len(self.yunwu_api_keys)} keys exhausted")
+        return None
+
+    def _yunwu_chat_completions(self, prompt):
+        """Legacy path for non-Gemini models via chat/completions.
+        No imageSize control here — the model interprets 4K from the
+        prompt text only."""
         url = f"{self.yunwu_base_url}/chat/completions"
         payload = {
             "model": self.yunwu_model,
