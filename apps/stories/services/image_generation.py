@@ -10,10 +10,7 @@ from .r2_storage import upload_to_r2
 
 logger = logging.getLogger(__name__)
 
-STYLE_PREFIX = (
-    "Children's picture book illustration, watercolor style, "
-    "soft warm colors, cute and friendly characters, "
-    "gentle lighting, storybook aesthetic. "
+_BASE_RULES = (
     "IMPORTANT: Do NOT include any text, words, letters, or writing in the image. "
     "No speech bubbles, no captions, no signs with text. Pure illustration only. "
     "FRAMING: Show every character FULLY within the frame — include the entire head "
@@ -22,14 +19,120 @@ STYLE_PREFIX = (
     "centered in the composition. "
 )
 
-COLORING_PREFIX = (
-    "Black and white coloring book page for children. "
+# Style matrix keyed by (age_bracket, story_type). Age buckets collapse the
+# 5 prompt tiers down to the 4 visual ones the user asked for. Anything
+# not matched falls back to a sensible default.
+_STYLE_MATRIX = {
+    # 0-2 (we use '1-3' bracket in our age_group choices)
+    ('1-3', 'bedtime'): (
+        "Minimal low-stimulation picture book illustration for babies and toddlers. "
+        "Large flat color blocks, very gentle soft blue / cream / pale pink palette. "
+        "One clear soft-edged subject per page, nearly empty backgrounds, "
+        "no busy detail. Calm bedtime atmosphere, warm but dim lighting."
+    ),
+    ('1-3', 'educational'): (
+        "High-contrast early-learning illustration. Bright clean primary colors, "
+        "one single focal object or action per page, thick simple shapes, "
+        "pure white or single-color background, friendly rounded forms."
+    ),
+    # 3-4 (we use '3-5' bracket)
+    ('3-5', 'bedtime'): (
+        "Soft watercolor / pastel children's picture book illustration. "
+        "Round, cuddly characters with big friendly faces, gentle warm lighting, "
+        "cozy safe-feeling atmosphere, muted dreamy palette of peach, cream and lavender."
+    ),
+    ('3-5', 'educational'): (
+        "Flat cartoon / clear children's book illustration. Expressive faces, "
+        "bright cheerful colors, clearly defined scene with one clear focal action, "
+        "simple but recognizable environment."
+    ),
+    # 5-6 (we use '5-7' bracket)
+    ('5-7', 'bedtime'): (
+        "Dreamy picture book illustration with moonlight, starlight, gentle textures. "
+        "Slight fantasy feel (glowing fireflies, floating petals) but always calming, "
+        "never scary or intense. Watercolor storybook quality, cool evening palette."
+    ),
+    ('5-7', 'educational'): (
+        "Richer detailed storybook illustration. Clear scene with cause-and-effect "
+        "visual storytelling, expressive character actions, vibrant but balanced colors, "
+        "natural/classroom/home settings rendered with believable detail."
+    ),
+    # 7+ (we use '8-10' and '11-12' buckets)
+    ('8-10', 'bedtime'): (
+        "Cinematic healing children's book illustration with soft cinematic lighting, "
+        "delicate textures, fairytale atmosphere. Richer color palette than younger "
+        "tiers, still calm and comforting. Professional picture book aesthetic."
+    ),
+    ('8-10', 'educational'): (
+        "Semi-realistic high-quality children's storybook illustration. Detailed "
+        "scenes with accurate proportions, strong visual communication, natural "
+        "lighting and full environments. Closer to middle-grade novel illustration."
+    ),
+}
+
+# Default fallback — what we used app-wide before the matrix existed.
+_DEFAULT_STYLE = (
+    "Children's picture book illustration, watercolor style, "
+    "soft warm colors, cute and friendly characters, "
+    "gentle lighting, storybook aesthetic."
+)
+
+
+def style_prompt_for(age_group: str = '', story_type: str = '') -> str:
+    """Return a STYLE_PREFIX appropriate for (age_group, story_type).
+
+    Falls through from exact match -> 8-10/type -> default. All prompts
+    get the base framing/no-text rules appended automatically.
+    """
+    # 11-12 shares the 8-10 visual tier (most mature-looking bucket).
+    ag = '8-10' if age_group in ('8-10', '11-12') else age_group
+    # Default unknown story types to bedtime (calm, safe) for matrix lookup.
+    st = story_type if story_type in ('bedtime', 'educational') else 'bedtime'
+
+    style = _STYLE_MATRIX.get((ag, st)) or _STYLE_MATRIX.get(('3-5', st)) or _DEFAULT_STYLE
+    return f"{style} {_BASE_RULES}"
+
+
+# Back-compat: existing callers can still import STYLE_PREFIX, but it's
+# now just the default bucket. Prefer style_prompt_for(age, type).
+STYLE_PREFIX = f"{_DEFAULT_STYLE} {_BASE_RULES}"
+
+
+_COLORING_BASE = (
     "STRICT RULES: ONLY black outlines on pure white background. "
     "NO colors, NO shading, NO grey, NO gradients, NO fill. "
-    "Thick bold black line art, simple clean outlines, large empty areas to color in. "
     "Style: children's coloring book, cute cartoon, uncolored. "
     "Do NOT include any text, words, or letters. "
 )
+
+
+def coloring_prompt_for(age_group: str = '') -> str:
+    """Return a COLORING_PREFIX tuned for the child's age — simpler
+    line art with big empty areas for younger kids, more detail for
+    older ones."""
+    if age_group in ('1-3', '3-5'):
+        line_quality = (
+            "Black and white coloring book page for young children. "
+            "Very thick bold outlines, VERY simple shapes, only a handful of lines, "
+            "HUGE empty areas to color in. Minimal detail. "
+        )
+    elif age_group == '5-7':
+        line_quality = (
+            "Black and white coloring book page for children. "
+            "Bold clean outlines, moderate shapes, medium amount of detail, "
+            "some background elements, generous empty areas to color in. "
+        )
+    else:  # 8-10, 11-12, unknown
+        line_quality = (
+            "Black and white coloring book page for older children. "
+            "Fine clean outlines with more detail — textures, patterns, small "
+            "background elements — but still pure line art with color-in areas. "
+        )
+    return line_quality + _COLORING_BASE
+
+
+# Back-compat for any old callers that still import COLORING_PREFIX.
+COLORING_PREFIX = coloring_prompt_for('5-7')
 
 # Polling config for async APIs (APImart/seedance fallback)
 POLL_INTERVAL = 3
@@ -66,9 +169,9 @@ class ImageGenerationService:
 
     # ── Public API ───────────────────────────────────────────────
 
-    def generate_page_image(self, story_id, page_number, image_prompt):
+    def generate_page_image(self, story_id, page_number, image_prompt, age_group='', story_type=''):
         """Generate a single 16:9 image for a story page."""
-        enhanced_prompt = STYLE_PREFIX + image_prompt
+        enhanced_prompt = style_prompt_for(age_group, story_type) + ' ' + image_prompt
 
         for attempt in range(1, self.MAX_RETRIES + 1):
             try:
@@ -98,7 +201,7 @@ class ImageGenerationService:
 
         return ''
 
-    def generate_quad_panel(self, story_id, pages):
+    def generate_quad_panel(self, story_id, pages, age_group='', story_type=''):
         """Generate 4 scenes in a 2x2 grid, split into separate images."""
         labels = ['TOP-LEFT', 'TOP-RIGHT', 'BOTTOM-LEFT', 'BOTTOM-RIGHT']
         panel_descs = ' '.join(
@@ -108,7 +211,7 @@ class ImageGenerationService:
         grid_desc = "Four-panel grid illustration, 2x2 layout" if n == 4 else f"{n}-panel grid illustration"
 
         combined_prompt = (
-            f"{STYLE_PREFIX}"
+            f"{style_prompt_for(age_group, story_type)} "
             f"{grid_desc}, each panel is a separate scene with clear borders between panels. "
             f"{panel_descs}"
         )
@@ -140,8 +243,9 @@ class ImageGenerationService:
 
         return []
 
-    def generate_coloring_pages(self, story_id, pages):
+    def generate_coloring_pages(self, story_id, pages, age_group=''):
         """Generate coloring book line art versions for story pages."""
+        coloring_prefix = coloring_prompt_for(age_group)
         results = []
         i = 0
         while i < len(pages):
@@ -158,7 +262,7 @@ class ImageGenerationService:
                 )
                 grid_desc = "Four-panel grid" if batch_size == 4 else f"{batch_size}-panel grid"
                 combined_prompt = (
-                    f"{COLORING_PREFIX}"
+                    f"{coloring_prefix}"
                     f"{grid_desc}, each panel is a separate scene with clear borders between panels. "
                     f"{panel_descs}"
                 )
@@ -168,12 +272,12 @@ class ImageGenerationService:
                 else:
                     for page_num, prompt in batch:
                         time.sleep(3)
-                        url = self._generate_single_coloring(story_id, page_num, prompt)
+                        url = self._generate_single_coloring(story_id, page_num, prompt, age_group)
                         if url:
                             results.append((page_num, url))
             else:
                 page_num, prompt = batch[0]
-                url = self._generate_single_coloring(story_id, page_num, prompt)
+                url = self._generate_single_coloring(story_id, page_num, prompt, age_group)
                 if url:
                     results.append((page_num, url))
 
@@ -414,9 +518,9 @@ class ImageGenerationService:
             logger.warning(f"R2 upload failed for story {story_id} page {page_number}: {e}")
             return None
 
-    def _generate_single_coloring(self, story_id, page_number, image_prompt):
+    def _generate_single_coloring(self, story_id, page_number, image_prompt, age_group=''):
         """Generate a single coloring page line art."""
-        enhanced_prompt = COLORING_PREFIX + image_prompt
+        enhanced_prompt = coloring_prompt_for(age_group) + image_prompt
 
         for attempt in range(1, self.MAX_RETRIES + 1):
             try:

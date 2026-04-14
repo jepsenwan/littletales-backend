@@ -298,7 +298,7 @@ def _generate_images(job, story):
         if batch_size >= 2:
             # Quad/multi-panel: generate 2-4 pages in 1 API call
             page_data = [(p.page_number, p.image_prompt) for p in batch]
-            results = service.generate_quad_panel(story.id, page_data)
+            results = service.generate_quad_panel(story.id, page_data, age_group=story.age_group, story_type=story.story_type)
             api_calls += 1
 
             # Map results back to pages
@@ -310,7 +310,7 @@ def _generate_images(job, story):
                 else:
                     # Fallback: generate individually for failed panels
                     _time.sleep(3)
-                    url = service.generate_page_image(story.id, p.page_number, p.image_prompt)
+                    url = service.generate_page_image(story.id, p.page_number, p.image_prompt, age_group=story.age_group, story_type=story.story_type)
                     api_calls += 1
                     if url:
                         p.image_url = url
@@ -321,7 +321,7 @@ def _generate_images(job, story):
         else:
             # Single remaining page
             page = batch[0]
-            url = service.generate_page_image(story.id, page.page_number, page.image_prompt)
+            url = service.generate_page_image(story.id, page.page_number, page.image_prompt, age_group=story.age_group, story_type=story.story_type)
             api_calls += 1
             if url:
                 page.image_url = url
@@ -377,7 +377,7 @@ def _generate_coloring_pages(job, story):
     if not pages:
         return
 
-    results = service.generate_coloring_pages(story.id, pages)
+    results = service.generate_coloring_pages(story.id, pages, age_group=story.age_group)
     result_map = {pn: url for pn, url in results}
 
     for page in story.pages.all():

@@ -6,14 +6,79 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 
+# (age_bracket, story_type) -> tone guidance appended after the general
+# age_guidance and type_guidance. Keeps per-age-type voice distinct:
+# e.g. 0-2 bedtime is repetitive + rhythmic, while 0-2 educational is
+# single-word labelling.
+_AGE_TYPE_TONE = {
+    ('1-3', 'bedtime'): (
+        "Tone: use heavy REPETITION and gentle rhythm (almost like a lullaby). "
+        "Short refrains that repeat across pages. Only 1-2 very short sentences per page. "
+        "Lots of soft sensory words (warm, soft, hush, sleepy). No plot tension."
+    ),
+    ('1-3', 'educational'): (
+        "Tone: one single concrete concept per page — name it, point to it, repeat it. "
+        "Pattern: 'This is a X. X is [color/sound/action]. Can you say X?' Lots of "
+        "repetition and call-and-response. Onomatopoeia encouraged (woof, splash, boom)."
+    ),
+    ('3-5', 'bedtime'): (
+        "Tone: warm, cozy, reassuring. Simple problem resolved by a caring helper. "
+        "Soft sensory details (blanket, glow, whisper). End with everyone safe and asleep."
+    ),
+    ('3-5', 'educational'): (
+        "Tone: curious and cheerful. The main character asks 'what is that?' / "
+        "'why does this happen?' and the answer becomes the lesson, naturally woven in. "
+        "Show the concept in action, don't lecture."
+    ),
+    ('5-7', 'bedtime'): (
+        "Tone: dreamy and slightly magical (moonlight conversations, friendly stars). "
+        "Use richer descriptive language than younger bedtime but keep the pulse calm — "
+        "no chase scenes or danger. End with a soft settling-down beat."
+    ),
+    ('5-7', 'educational'): (
+        "Tone: a small mystery or challenge drives the learning. Cause-and-effect is "
+        "explicit in the narrative ('because X, then Y'). The character tries, fails once, "
+        "adjusts, and succeeds — so the concept is demonstrated, not told."
+    ),
+    ('8-10', 'bedtime'): (
+        "Tone: literary, comforting, with a touch of introspection. Character has a small "
+        "worry from the day, works through it, finds peace. Use richer metaphor and "
+        "figurative language. Dialogue should feel age-natural, not babyish."
+    ),
+    ('8-10', 'educational'): (
+        "Tone: story-driven non-fiction vibe. Give real-world accurate details about the "
+        "concept. Character applies the concept to solve a meaningful problem. "
+        "Vocabulary challenges the reader a little — this is a learning opportunity."
+    ),
+    ('11-12', 'bedtime'): (
+        "Tone: reflective and calming. Older-reader sensibility — the character processes "
+        "a nuanced feeling (uncertainty, hope, gratitude) before sleep. Literary cadence "
+        "but still gentle; avoid heavy themes."
+    ),
+    ('11-12', 'educational'): (
+        "Tone: middle-grade chapter-book feel. Layered plot with real stakes, scientific or "
+        "historical accuracy matters. Main character thinks in complete arguments. "
+        "Sophisticated vocabulary is a feature, not a problem."
+    ),
+}
+
+
+def _age_type_tone(age_group: str, story_type: str) -> str:
+    """Extra tone guidance for the (age, type) pair. Empty string if no
+    matrix entry — callers simply append it after the base guidance."""
+    return _AGE_TYPE_TONE.get((age_group, story_type), '')
+
+
 class StoryGenerationService:
     # Ordered fallback chain: (base_url, api_key, model, label)
-    # Cheapest Yunwu key first, then Yunwu gpt-5 premium, finally APImart.
+    # Primary: Yunwu xianshi_tejia gpt-5-chat-latest (¥0.375/3.0 per 1M tok)
+    # Fallback 1: Yunwu xianshi_tejia gpt-5.1-2025-11-13
+    # Fallback 2: APImart gpt-5.2
     def _provider_chain(self):
+        YUNWU_XIANSHI = 'sk-ObIXXRitJORTQi3Jm2qMDrbHHYrXRNzZXxHo3tr8Qyfp7afs'
         return [
-            (settings.YUNWU_BASE_URL, 'sk-ObIXXRitJORTQi3Jm2qMDrbHHYrXRNzZXxHo3tr8Qyfp7afs', 'gpt-4o-mini', 'yunwu.xianshi_tejia.4o-mini(¥0.045/0.18)'),
-            (settings.YUNWU_BASE_URL, 'sk-fASIuZ9NgZMgL79aUoiQMdISqQS5fA9bNXkIOQVaIbvxUmki', 'gpt-4o-mini', 'yunwu.nixiang.4o-mini(¥0.1/0.42)'),
-            (settings.YUNWU_BASE_URL, 'sk-ObIXXRitJORTQi3Jm2qMDrbHHYrXRNzZXxHo3tr8Qyfp7afs', 'gpt-5-chat-latest', 'yunwu.xianshi_tejia.gpt-5(¥0.375/3.0)'),
+            (settings.YUNWU_BASE_URL, YUNWU_XIANSHI, 'gpt-5-chat-latest', 'yunwu.xianshi_tejia.gpt-5(¥0.375/3.0)'),
+            (settings.YUNWU_BASE_URL, YUNWU_XIANSHI, 'gpt-5.1-2025-11-13', 'yunwu.xianshi_tejia.gpt-5.1'),
             (settings.APIMART_BASE_URL, settings.APIMART_API_KEY, 'gpt-5.2-apimart', 'apimart.gpt-5.2'),
         ]
 
@@ -239,6 +304,7 @@ Number of pages: {page_count}
 
 {age_guidance.get(age_group, age_guidance['3-5'])}
 {type_guidance.get(story_type, type_guidance['bedtime'])}
+{_age_type_tone(age_group, story_type)}
 
 {self._character_instruction(params)}
 {self._classic_characters_instruction(params)}
