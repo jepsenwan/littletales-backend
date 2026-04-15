@@ -69,6 +69,22 @@ def _age_type_tone(age_group: str, story_type: str) -> str:
     return _AGE_TYPE_TONE.get((age_group, story_type), '')
 
 
+def _vocab_target_for_age(age) -> int:
+    """Fixed total vocabulary count per story, aligned with the vocab-card
+    grid (4 per image) so the last panel is never half-empty."""
+    try:
+        a = int(age)
+    except (TypeError, ValueError):
+        a = 4
+    if a <= 3:
+        return 4
+    if a <= 5:
+        return 8
+    if a <= 7:
+        return 12
+    return 16  # ages 8-10 and 11-12
+
+
 class StoryGenerationService:
     # Ordered fallback chain: (base_url, api_key, model, label)
     # Primary: Yunwu xianshi_tejia gpt-5-chat-latest (¥0.375/3.0 per 1M tok)
@@ -142,6 +158,22 @@ class StoryGenerationService:
             'bilingual': '请用中英双语写故事。每段文字先写中文，再写英文翻译。',
         }
 
+        vocab_target = _vocab_target_for_age(params.get('age', 4))
+        avoid_words = params.get('recent_vocab_words') or []
+        allow_reuse = int(params.get('age', 4)) <= 3
+        if avoid_words and not allow_reuse:
+            avoid_block = (
+                "\n- DO NOT reuse any of these words the child has already learned in recent stories "
+                f"(pick fresh vocabulary instead): {', '.join(avoid_words)}"
+            )
+        elif avoid_words and allow_reuse:
+            avoid_block = (
+                "\n- The child has seen these words recently; prefer new ones when possible, but for this "
+                f"age (1-3) reuse is acceptable if the word is a genuinely high-frequency basic: {', '.join(avoid_words)}"
+            )
+        else:
+            avoid_block = ""
+
         return f"""You are a professional children's picture book story writer.
 You create warm, educational, and age-appropriate stories for children.
 
@@ -198,7 +230,7 @@ CRITICAL rules for gender and personality:
 - The story should address the child's situation through metaphor and plot, NOT by naming the traits
 
 Rules for vocabulary (THIS IS AN EDUCATIONAL PRODUCT — DIFFICULTY MUST BE STRICTLY AGE-MATCHED):
-- Each page should have 2-3 vocabulary words appropriate for the child's age level
+- The story MUST include EXACTLY {vocab_target} vocabulary words total across all pages (see distribution guidance below). This is a hard count — not "around", not "up to". Distribute them reasonably across pages so no page is empty of vocab and no page is overloaded.
 - Difficulty MUST advance meaningfully with age. NEVER give a 10-year-old words a 4-year-old already knows (cat/dog/eat). NEVER give a 3-year-old abstract words like "resilience" or 成语. Treat this as a hard constraint — the vocabulary list is the learning payload of the story.
 
 Age-bracket requirements (pick ONLY from the appropriate tier):
@@ -213,7 +245,7 @@ Format & safety:
 - For English stories: always pick whole words, never individual letters, never filler words (the/a/is).
 - Each vocabulary entry needs: the word exactly as it appears in the text, a simple one-sentence definition a child can understand (phrased at or slightly below the child's level), and a relevant emoji.
 - Choose words that actually appear in this page's text AND are genuinely worth learning at this age (i.e. the child probably doesn't know them yet but will encounter them again).
-- SAFETY: NEVER pick words related to violence, weapons, death, fear, horror, darkness, blood, or anything scary/inappropriate for children. Only pick positive, educational, neutral, or nature-related words.
+- SAFETY: NEVER pick words related to violence, weapons, death, fear, horror, darkness, blood, or anything scary/inappropriate for children. Only pick positive, educational, neutral, or nature-related words.{avoid_block}
 
 Other important rules:
 - image_prompt MUST always be in English regardless of story language

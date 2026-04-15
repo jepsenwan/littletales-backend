@@ -220,6 +220,27 @@ def _generate_text(job, story, params):
         params['character_description'] = story.child_profile.character_description
         logger.info(f"Injected character description: {story.child_profile.character_description[:60]}")
 
+    # Collect vocab words already taught to this child in recent stories so
+    # the generator can avoid repeating flashcards the user has already seen.
+    if story.child_profile:
+        recent_pages = StoryPage.objects.filter(
+            story__child_profile=story.child_profile,
+            story__status='completed',
+        ).exclude(story=story).order_by('-story__created_at', 'page_number')[:120]
+        seen = []
+        seen_set = set()
+        for page in recent_pages:
+            for entry in (page.vocabulary or []):
+                w = (entry.get('word') or '').strip()
+                if w and w not in seen_set:
+                    seen_set.add(w)
+                    seen.append(w)
+            if len(seen) >= 200:
+                break
+        if seen:
+            params['recent_vocab_words'] = seen[:200]
+            logger.info(f"Passing {len(params['recent_vocab_words'])} previously-learned words to avoid")
+
     story_data = service.generate(params)
 
     # Update story
