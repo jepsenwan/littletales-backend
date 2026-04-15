@@ -17,8 +17,8 @@ class VoiceCloneService:
     def _headers(self):
         return {
             'Content-Type': 'application/json',
-            'Authorization': f'Bearer;{self.token}',
-            'Resource-Id': 'seed-icl-2.0',
+            'Authorization': f'Bearer; {self.token}',
+            'Resource-Id': 'volc.megatts.voiceclone',
         }
 
     def upload_audio(self, speaker_id: str, audio_base64: str, audio_format: str = 'wav'):
