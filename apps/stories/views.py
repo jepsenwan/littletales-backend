@@ -768,6 +768,13 @@ def custom_voice_detail(request, voice_id):
         return Response({'error': 'Voice not found'}, status=status.HTTP_404_NOT_FOUND)
 
     if request.method == 'DELETE':
+        # Best-effort upstream removal so the voice sample is cleared at
+        # Volcengine too, matching what the Privacy Policy promises.
+        try:
+            from .services.voice_clone import VoiceCloneService
+            VoiceCloneService().delete_speaker(custom_voice.speaker_id)
+        except Exception:
+            pass  # upstream failure shouldn't block local delete
         custom_voice.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 

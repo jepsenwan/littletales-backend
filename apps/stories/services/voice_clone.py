@@ -13,6 +13,7 @@ class VoiceCloneService:
         self.token = settings.VOLCENGINE_TTS_TOKEN
         self.upload_url = 'https://openspeech.bytedance.com/api/v1/mega_tts/audio/upload'
         self.status_url = 'https://openspeech.bytedance.com/api/v1/mega_tts/status'
+        self.delete_url = 'https://openspeech.bytedance.com/api/v1/mega_tts/audio/delete'
 
     def _headers(self):
         return {
@@ -99,3 +100,24 @@ class VoiceCloneService:
         except Exception as e:
             logger.error(f"Voice clone status check error: {e}")
             return {'speaker_id': speaker_id, 'status': -1, 'error': str(e)}
+
+    def delete_speaker(self, speaker_id: str) -> bool:
+        """Request removal of the voice sample at Volcengine.
+
+        Best-effort: if the upstream rejects or is unreachable we still
+        consider the local delete successful; the voice won't be usable
+        for new narration either way because the local record is gone.
+        """
+        try:
+            resp = requests.post(
+                self.delete_url,
+                json={'appid': self.appid, 'speaker_id': speaker_id},
+                headers=self._headers(),
+                timeout=20,
+            )
+            resp.raise_for_status()
+            logger.info(f"Voice clone delete requested upstream: speaker_id={speaker_id}")
+            return True
+        except Exception as e:
+            logger.warning(f"Voice clone upstream delete failed (non-fatal): speaker_id={speaker_id}, err={e}")
+            return False
