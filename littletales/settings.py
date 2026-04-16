@@ -221,11 +221,6 @@ TTS_VOICES = {
         {'id': 'en_male_dryw_mars_bigtts', 'name': 'Dryw', 'gender': 'male', 'lang': 'en'},
         {'id': 'en_male_smith_mars_bigtts', 'name': 'Smith', 'gender': 'male', 'lang': 'en'},
         {'id': 'en_female_amanda_mars_bigtts', 'name': 'Amanda', 'gender': 'female', 'lang': 'en'},
-        # Children voices (also work for English)
-        {'id': 'zh_male_tiancaitongsheng_mars_bigtts', 'name': 'Child Boy', 'gender': 'male', 'lang': 'en', 'tag': 'child'},
-        {'id': 'zh_male_naiqimengwa_mars_bigtts', 'name': 'Cute Kid', 'gender': 'male', 'lang': 'en', 'tag': 'child'},
-        {'id': 'zh_female_shaoergushi_mars_bigtts', 'name': 'Story Girl', 'gender': 'female', 'lang': 'en', 'tag': 'child'},
-        {'id': 'zh_female_peiqi_uranus_bigtts', 'name': 'Peppa', 'gender': 'female', 'lang': 'en', 'tag': 'child'},
     ],
     'zh': [
         {'id': 'zh_female_vv_uranus_bigtts', 'name': 'Vivi 2.0', 'name_en': 'Vivi 2.0', 'gender': 'female', 'lang': 'zh'},
