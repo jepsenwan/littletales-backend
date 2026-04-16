@@ -69,6 +69,31 @@ def _age_type_tone(age_group: str, story_type: str) -> str:
     return _AGE_TYPE_TONE.get((age_group, story_type), '')
 
 
+CHILD_NAME_PLACEHOLDER = '__CHILDNAME__'
+
+
+def _restore_child_name(obj, real_name: str):
+    """Walk a story-data tree and replace every placeholder with real_name.
+
+    Mutates dicts/lists in place; strings inside dicts/lists are replaced
+    via parent-key assignment. Returns obj for convenience.
+    """
+    if not real_name:
+        return obj
+    placeholder = CHILD_NAME_PLACEHOLDER
+    if isinstance(obj, str):
+        return obj.replace(placeholder, real_name)
+    if isinstance(obj, list):
+        for i, v in enumerate(obj):
+            obj[i] = _restore_child_name(v, real_name)
+        return obj
+    if isinstance(obj, dict):
+        for k, v in list(obj.items()):
+            obj[k] = _restore_child_name(v, real_name)
+        return obj
+    return obj
+
+
 def _vocab_target_for_age(age) -> int:
     """Fixed total vocabulary count per story, aligned with the vocab-card
     grid (4 per image) so the last panel is never half-empty."""
@@ -102,10 +127,21 @@ class StoryGenerationService:
         """
         Generate a structured story JSON from user input params.
         Tries each provider in _provider_chain() in order; first success wins.
+
+        To avoid leaking the child's real name into upstream LLM logs, we
+        swap it for CHILD_NAME_PLACEHOLDER before building the prompt and
+        restore the real name in the returned story_data. The placeholder
+        is written to provider logs; the DB holds the real name so TTS and
+        the displayed text work normally.
         """
-        prompt = self._build_prompt(params)
+        real_child_name = params.get('child_name') or ''
+        working_params = dict(params)
+        if real_child_name:
+            working_params['child_name'] = CHILD_NAME_PLACEHOLDER
+
+        prompt = self._build_prompt(working_params)
         messages = [
-            {"role": "system", "content": self._system_prompt(params)},
+            {"role": "system", "content": self._system_prompt(working_params)},
             {"role": "user", "content": prompt},
         ]
 
@@ -140,6 +176,7 @@ class StoryGenerationService:
                     raise ValueError("LLM returned invalid story structure")
 
                 logger.info(f"[story-gen] {label} succeeded, {len(content)} chars")
+                _restore_child_name(story_data, real_child_name)
                 return story_data
 
             except Exception as e:
@@ -178,6 +215,13 @@ class StoryGenerationService:
 You create warm, educational, and age-appropriate stories for children.
 
 {lang_instruction.get(language, lang_instruction['zh'])}
+
+NAME TOKEN — IMPORTANT:
+The child's name in the user prompt is given as the literal token {CHILD_NAME_PLACEHOLDER}.
+Whenever you refer to the child in the story text, dialogue, title, moral, goodnight message,
+or any other output field, write the EXACT token {CHILD_NAME_PLACEHOLDER} — do not translate,
+transliterate, shorten, or substitute a different name. Our system replaces the token with
+the real name after you respond.
 
 You MUST return a valid JSON object with this exact structure:
 {{
