@@ -20,6 +20,7 @@ urlpatterns = [
     path('voices/', views.voice_list, name='voice-list'),
     path('voices/preview/', views.voice_preview, name='voice-preview'),
     path('voices/custom/', views.my_custom_voices, name='custom-voices'),
+    path('voices/custom/<int:voice_id>/', views.custom_voice_detail, name='custom-voice-detail'),
     path('voices/clone/', views.clone_voice, name='clone-voice'),
     path('voices/clone/<int:voice_id>/status/', views.clone_voice_status, name='clone-voice-status'),
     path('reading-stats/', views.reading_stats, name='reading-stats'),

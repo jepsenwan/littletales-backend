@@ -759,6 +759,33 @@ def clone_voice(request):
         )
 
 
+@api_view(['PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated])
+def custom_voice_detail(request, voice_id):
+    """Rename (PATCH) or remove (DELETE) a cloned voice."""
+    try:
+        custom_voice = CustomVoice.objects.get(id=voice_id, user=request.user)
+    except CustomVoice.DoesNotExist:
+        return Response({'error': 'Voice not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == 'DELETE':
+        custom_voice.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    name = (request.data.get('name') or '').strip()
+    if not name:
+        return Response({'error': 'name is required'}, status=status.HTTP_400_BAD_REQUEST)
+    custom_voice.name = name[:100]
+    custom_voice.save(update_fields=['name'])
+    return Response({
+        'id': custom_voice.id,
+        'name': custom_voice.name,
+        'speaker_id': custom_voice.speaker_id,
+        'status': custom_voice.status,
+        'demo_audio_url': custom_voice.demo_audio_url,
+    })
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def clone_voice_status(request, voice_id):
