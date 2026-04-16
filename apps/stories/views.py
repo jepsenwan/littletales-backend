@@ -699,6 +699,7 @@ def my_custom_voices(request):
             'name': v.name,
             'speaker_id': v.speaker_id,
             'status': v.status,
+            'language': v.language,
             'demo_audio_url': v.demo_audio_url,
             'created_at': v.created_at.isoformat(),
         }
@@ -717,6 +718,9 @@ def clone_voice(request):
     name = request.data.get('name', '').strip()
     audio_base64 = request.data.get('audio_base64', '')
     audio_format = request.data.get('audio_format', 'wav')
+    language = request.data.get('language', 'en')
+    if language not in ('en', 'zh'):
+        language = 'en'
 
     if not name or not audio_base64:
         return Response(
@@ -734,6 +738,7 @@ def clone_voice(request):
         name=name,
         speaker_id=speaker_id,
         status='uploading',
+        language=language,
     )
 
     # Upload to Volcengine
@@ -749,6 +754,7 @@ def clone_voice(request):
             'name': custom_voice.name,
             'speaker_id': speaker_id,
             'status': 'training',
+            'language': custom_voice.language,
         }, status=status.HTTP_201_CREATED)
     else:
         custom_voice.status = 'failed'
@@ -782,6 +788,7 @@ def custom_voice_detail(request, voice_id):
         'name': custom_voice.name,
         'speaker_id': custom_voice.speaker_id,
         'status': custom_voice.status,
+        'language': custom_voice.language,
         'demo_audio_url': custom_voice.demo_audio_url,
     })
 
@@ -815,6 +822,7 @@ def clone_voice_status(request, voice_id):
         'name': custom_voice.name,
         'speaker_id': custom_voice.speaker_id,
         'status': custom_voice.status,
+        'language': custom_voice.language,
         'demo_audio_url': custom_voice.demo_audio_url,
     })
 

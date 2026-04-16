@@ -365,10 +365,16 @@ class CustomVoice(models.Model):
         ('failed', 'Failed'),
     ]
 
+    LANGUAGE_CHOICES = [('en', 'English'), ('zh', 'Chinese')]
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='custom_voices')
     name = models.CharField(max_length=100, help_text="User-given name, e.g. 'Mommy Voice'")
     speaker_id = models.CharField(max_length=100, unique=True, help_text='Volcengine speaker_id')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='uploading')
+    language = models.CharField(
+        max_length=4, choices=LANGUAGE_CHOICES, default='en',
+        help_text='Language the clone script was recorded in — used to filter voice pickers',
+    )
     demo_audio_url = models.URLField(max_length=500, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
