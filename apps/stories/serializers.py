@@ -138,6 +138,7 @@ class StoryGenerationInputSerializer(serializers.Serializer):
         help_text="Legacy: classic character IDs"
     )
     page_count = serializers.ChoiceField(choices=[(4, '4'), (6, '6'), (8, '8')], default=6, required=False)
+    include_child = serializers.BooleanField(required=False, default=True)
 
     def validate(self, attrs):
         if not attrs.get('child_profile_id') and (not attrs.get('child_name') or not attrs.get('age')):

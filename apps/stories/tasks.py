@@ -215,8 +215,10 @@ def _generate_text(job, story, params):
         story.child_profile = profile
         story.save()
 
-    # Inject character description if child has a created character
-    if story.child_profile and story.child_profile.character_description:
+    # Inject character description only when the child is actually being
+    # featured as the main character. In "story not about me" mode we skip
+    # this so the LLM invents a fresh hero instead of repainting the child.
+    if story.child_profile and story.child_profile.character_description and params.get('include_child', True):
         params['character_description'] = story.child_profile.character_description
         logger.info(f"Injected character description: {story.child_profile.character_description[:60]}")
 

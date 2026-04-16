@@ -322,11 +322,27 @@ Other important rules:
         elif gender == 'girl':
             gender_str = f"Child's gender: Girl (use she/her pronouns)"
 
-        prompt = f"""Create a personalized children's picture book story:
+        include_child = params.get('include_child', True)
+
+        if include_child:
+            header = f"""Create a personalized children's picture book story:
 
 Child's name: {child_name}
 Child's age: {age} years old
-{gender_str}
+{gender_str}"""
+            closing = (
+                f"Make the main character relatable to {child_name}. Address the situation naturally "
+                f"through the story's plot without being preachy. The story should feel magical and engaging."
+            )
+        else:
+            header = f"""Create an original children's picture book story for a {age}-year-old reader.
+The child ({child_name}) is the audience, NOT a character — do NOT insert {child_name} into the story or address them by name. The main character can be anyone (animal, human, object) that fits the theme."""
+            closing = (
+                "Invent an engaging, age-appropriate main character. Do not insert the reader into the story. "
+                "The story should feel magical and engaging."
+            )
+
+        prompt = f"""{header}
 {f"Child's personality traits (DO NOT mention these directly in the story): {personality}" if personality else ""}
 {f"Additional context: {personality_detail}" if personality_detail else ""}
 {f"Current situation/problem: {problem}" if problem else ""}
@@ -338,9 +354,9 @@ Number of pages: {page_count}
 {type_guidance.get(story_type, type_guidance['bedtime'])}
 {_age_type_tone(age_group, story_type)}
 
-{self._character_instruction(params)}
+{self._character_instruction(params) if include_child else ''}
 {self._classic_characters_instruction(params)}
-Make the main character relatable to {child_name}. Address the situation naturally through the story's plot without being preachy. The story should feel magical and engaging."""
+{closing}"""
 
         return prompt
 
@@ -357,21 +373,31 @@ Make the main character relatable to {child_name}. Address the situation natural
         )
 
     def _classic_characters_instruction(self, params):
+        include_child = params.get('include_child', True)
+        child_name = params.get('child_name', 'the child')
         # Support both template_id (new) and classic_characters list (legacy)
         template_id = params.get('story_template')
         if template_id:
             from ..classic_characters import get_template_by_id
             tpl = get_template_by_id(template_id)
             if tpl:
-                child_name = params.get('child_name', 'the child')
+                if include_child:
+                    weave = (
+                        f"Weave these classic characters into an original story with {child_name} as the main character. "
+                        f"The classic characters act as guides, friends, or mentors who HELP {child_name} "
+                        f"deal with the situation/problem described above. "
+                        f"They use their unique traits to comfort, teach, or inspire {child_name}. "
+                    )
+                else:
+                    weave = (
+                        "Build an original story around these classic characters. "
+                        "Do NOT insert the reader into the story. "
+                    )
                 return (
                     f"\nSTORY TEMPLATE - Use this classic story scenario:\n"
                     f"Theme: {tpl['title']} / {tpl['title_zh']}\n"
                     f"Characters:\n{tpl['character_descriptions']}\n\n"
-                    f"Weave these classic characters into an original story with {child_name} as the main character. "
-                    f"The classic characters act as guides, friends, or mentors who HELP {child_name} "
-                    f"deal with the situation/problem described above. "
-                    f"They use their unique traits to comfort, teach, or inspire {child_name}. "
+                    f"{weave}"
                     f"Keep each character's personality consistent with their classic portrayal "
                     f"but adapt them to be age-appropriate and fun.\n"
                 )
@@ -383,10 +409,13 @@ Make the main character relatable to {child_name}. Address the situation natural
         char_text = get_character_descriptions(classic_ids)
         if not char_text:
             return ''
-        child_name = params.get('child_name', 'the child')
+        if include_child:
+            tail = f"Use these classic characters alongside {child_name}. "
+        else:
+            tail = "Use these classic characters as the story's cast (no reader insertion). "
         return (
             f"\nCLASSIC STORY CHARACTERS - Include these characters in the story:\n"
             f"{char_text}\n\n"
-            f"Use these classic characters alongside {child_name}. "
+            f"{tail}"
             f"Keep each character's personality consistent with their classic portrayal.\n"
         )
