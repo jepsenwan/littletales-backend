@@ -254,6 +254,31 @@ def generate_story(request):
         if child_profile.character_description:
             data['character_description'] = child_profile.character_description
 
+    # Resolve supporting cast: siblings (other ChildProfiles in the same family)
+    # and pets (from the family's Pet list).
+    supporting_children = []
+    supporting_pets = []
+    sibling_ids = [i for i in (data.get('additional_child_ids') or []) if i != (child_profile.id if child_profile else None)]
+    if sibling_ids:
+        qs = _child_profiles_for(request.user).filter(id__in=sibling_ids)
+        for sib in qs:
+            supporting_children.append({
+                'name': sib.child_name,
+                'age': sib.age,
+                'gender': sib.gender,
+            })
+    pet_ids = data.get('pet_ids') or []
+    if pet_ids and child_profile and child_profile.family:
+        for p in (child_profile.family.pets or []):
+            if p.get('id') in pet_ids:
+                supporting_pets.append({
+                    'name': p.get('name') or 'pet',
+                    'species': p.get('species') or '',
+                    'description': p.get('description') or '',
+                })
+    data['supporting_children'] = supporting_children
+    data['supporting_pets'] = supporting_pets
+
     age = data['age']
     if age <= 3:
         age_group = '1-3'

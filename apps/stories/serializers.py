@@ -139,6 +139,19 @@ class StoryGenerationInputSerializer(serializers.Serializer):
     )
     page_count = serializers.ChoiceField(choices=[(4, '4'), (6, '6'), (8, '8')], default=6, required=False)
     include_child = serializers.BooleanField(required=False, default=True)
+    # Siblings / additional children to include as supporting cast.
+    additional_child_ids = serializers.ListField(
+        child=serializers.IntegerField(), required=False, default=list,
+    )
+    # Pet ids (string) to include. Matches Family.pets[*].id.
+    pet_ids = serializers.ListField(
+        child=serializers.CharField(), required=False, default=list,
+    )
+    # Who the story is "about" — 'child' (default) or 'pet'. Pet means the
+    # plot centers on a pet; child is still the listener and vocab anchor.
+    story_about = serializers.ChoiceField(
+        choices=[('child', 'child'), ('pet', 'pet')], default='child', required=False,
+    )
 
     def validate(self, attrs):
         if not attrs.get('child_profile_id') and (not attrs.get('child_name') or not attrs.get('age')):

@@ -62,6 +62,13 @@ class UserProfile(models.Model):
 class Family(models.Model):
     name = models.CharField(max_length=100, help_text="Family name (e.g., 'The Smiths')")
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_families')
+    pets = models.JSONField(
+        default=list, blank=True,
+        help_text=(
+            "List of pets that can be included in stories. Each entry is a dict: "
+            "{id: str, name: str, species: str, emoji: str, description: str}"
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

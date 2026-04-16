@@ -367,17 +367,48 @@ Other important rules:
             gender_str = f"Child's gender: Girl (use she/her pronouns)"
 
         include_child = params.get('include_child', True)
+        story_about = params.get('story_about', 'child')
+        supporting_children = params.get('supporting_children') or []
+        supporting_pets = params.get('supporting_pets') or []
+
+        def _cast_block():
+            lines = []
+            if supporting_children:
+                lines.append("Siblings / friends in the family (supporting cast, must appear at least once, but the main character drives the plot):")
+                for sc in supporting_children:
+                    g = sc.get('gender') or ''
+                    lines.append(f"- {sc.get('name')} ({sc.get('age')}, {g})")
+            if supporting_pets:
+                lines.append("Pets in the family (must appear as characters with their names):")
+                for p in supporting_pets:
+                    parts = [x for x in [p.get('species'), p.get('description')] if x]
+                    detail = f" — {', '.join(parts)}" if parts else ''
+                    lines.append(f"- {p.get('name')}{detail}")
+            return ("\n" + "\n".join(lines) + "\n") if lines else ""
 
         if include_child:
-            header = f"""Create a personalized children's picture book story:
+            if story_about == 'pet' and supporting_pets:
+                main_pet = supporting_pets[0].get('name')
+                header = f"""Create a personalized children's picture book story:
+
+Main character: {main_pet} (the family pet; the plot centers on this pet's adventure)
+Listener / reader: {child_name} ({age} years old, appears as a supporting friend to {main_pet})
+{gender_str}"""
+                closing = (
+                    f"The plot should center on {main_pet}'s adventure. {child_name} appears as a "
+                    f"warm supporting friend but is not the driver of the plot. Keep the tone "
+                    f"suitable for a {age}-year-old listener. The story should feel magical and engaging."
+                )
+            else:
+                header = f"""Create a personalized children's picture book story:
 
 Child's name: {child_name}
 Child's age: {age} years old
 {gender_str}"""
-            closing = (
-                f"Make the main character relatable to {child_name}. Address the situation naturally "
-                f"through the story's plot without being preachy. The story should feel magical and engaging."
-            )
+                closing = (
+                    f"Make the main character relatable to {child_name}. Address the situation naturally "
+                    f"through the story's plot without being preachy. The story should feel magical and engaging."
+                )
         else:
             header = f"""Create an original children's picture book story for a {age}-year-old reader.
 The child ({child_name}) is the audience, NOT a character — do NOT insert {child_name} into the story or address them by name. The main character can be anyone (animal, human, object) that fits the theme."""
@@ -387,6 +418,7 @@ The child ({child_name}) is the audience, NOT a character — do NOT insert {chi
             )
 
         prompt = f"""{header}
+{_cast_block()}
 {f"Child's personality traits (DO NOT mention these directly in the story): {personality}" if personality else ""}
 {f"Additional context: {personality_detail}" if personality_detail else ""}
 {f"Current situation/problem: {problem}" if problem else ""}
