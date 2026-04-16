@@ -80,16 +80,6 @@ class ChildProfile(models.Model):
     current_usage_minutes = models.PositiveIntegerField(default=0)
     last_usage_reset_date = models.DateField(default=date.today)
 
-    # Bedtime / sleep timer
-    bedtime = models.TimeField(
-        null=True, blank=True,
-        help_text='Bedtime for this child, e.g. 20:30. Stories won\'t play after this time.'
-    )
-    wake_time = models.TimeField(
-        null=True, blank=True,
-        help_text='Wake time for this child, e.g. 07:00.'
-    )
-
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -110,21 +100,6 @@ class ChildProfile(models.Model):
     @property
     def is_screen_time_exceeded(self):
         return self.remaining_screen_time <= 0
-
-    @property
-    def is_within_allowed_hours(self):
-        if not self.bedtime and not self.wake_time:
-            return True
-        from django.utils import timezone as tz
-        now = tz.localtime().time()
-        if self.bedtime and self.wake_time:
-            # e.g. wake 07:00 ~ bedtime 20:30
-            return self.wake_time <= now <= self.bedtime
-        if self.bedtime:
-            return now <= self.bedtime
-        if self.wake_time:
-            return now >= self.wake_time
-        return True
 
     def is_story_type_allowed(self, story_type):
         if self.blocked_story_types and story_type in self.blocked_story_types:

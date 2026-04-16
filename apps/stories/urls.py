@@ -16,7 +16,6 @@ urlpatterns = [
     path('child-profiles/<int:pk>/add-time/', views.add_time, name='add-time'),
     # Character
     path('child-profiles/<int:pk>/character/generate/', views.generate_character, name='generate-character'),
-    path('child-profiles/<int:pk>/character/from-photo/', views.character_from_photo, name='character-from-photo'),
     path('voices/', views.voice_list, name='voice-list'),
     path('voices/preview/', views.voice_preview, name='voice-preview'),
     path('voices/custom/', views.my_custom_voices, name='custom-voices'),

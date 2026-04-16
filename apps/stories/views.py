@@ -240,13 +240,6 @@ def generate_story(request):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        # Check bedtime
-        if not child_profile.is_within_allowed_hours:
-            return Response(
-                {'error': f'It is past bedtime for {child_profile.child_name}.'},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         data['child_name'] = child_profile.child_name
         data['age'] = child_profile.age
         data['gender'] = child_profile.gender
@@ -1089,65 +1082,6 @@ def generate_character(request, pk):
         'character_description': description,
         'character_image_url': image_url,
         'character_features': features,
-    })
-
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def character_from_photo(request, pk):
-    """Analyze a photo to extract features, then generate character.
-    Body: {"photo_url": "https://..."} or multipart with 'photo' file.
-    """
-    child = _child_profiles_for(request.user).filter(id=pk).first()
-    if not child:
-        return Response({'error': 'Child profile not found'}, status=status.HTTP_404_NOT_FOUND)
-
-    from .services.quota import check_and_increment_character_quota, refund_character_quota
-    allowed, reason = check_and_increment_character_quota(request.user)
-    if not allowed:
-        return Response({'error': reason}, status=status.HTTP_429_TOO_MANY_REQUESTS)
-
-    from .services.character_generation import analyze_photo, build_description_from_features, generate_character_image
-
-    # COPPA: never persist the child's photo. Analyze in-memory only.
-    photo_bytes = None
-    mime_type = 'image/jpeg'
-    if 'photo' in request.FILES:
-        photo_file = request.FILES['photo']
-        photo_bytes = photo_file.read()
-        mime_type = photo_file.content_type or 'image/jpeg'
-
-    if not photo_bytes:
-        refund_character_quota(request.user)
-        return Response({'error': 'Upload a photo file'}, status=status.HTTP_400_BAD_REQUEST)
-
-    # Analyze photo with Vision AI (bytes only, no storage)
-    features = analyze_photo(photo_bytes=photo_bytes, mime_type=mime_type)
-    # photo_bytes goes out of scope immediately after this call
-    del photo_bytes
-
-    if not features:
-        refund_character_quota(request.user)
-        return Response({'error': 'Could not analyze photo'}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-
-    description = build_description_from_features(features, child.child_name)
-    child.character_features = features
-    child.character_description = description
-    child.save(update_fields=['character_features', 'character_description'])
-
-    # Generate character image
-    image_url = generate_character_image(child)
-    if not image_url:
-        refund_character_quota(request.user)
-        return Response({'error': 'Character image generation failed. Please try again.'}, status=status.HTTP_502_BAD_GATEWAY)
-
-    child.character_image_url = image_url
-    child.save(update_fields=['character_image_url'])
-
-    return Response({
-        'character_features': features,
-        'character_description': description,
-        'character_image_url': image_url,
     })
 
 

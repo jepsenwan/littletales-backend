@@ -183,7 +183,6 @@ class ChildProfileSerializer(serializers.ModelSerializer):
     age = serializers.IntegerField(read_only=True)
     remaining_screen_time = serializers.IntegerField(read_only=True)
     is_screen_time_exceeded = serializers.BooleanField(read_only=True)
-    is_within_allowed_hours = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = ChildProfile
@@ -194,12 +193,11 @@ class ChildProfileSerializer(serializers.ModelSerializer):
             'favorite_themes',
             'allowed_story_types', 'blocked_story_types',
             'daily_screen_limit_minutes', 'remaining_screen_time', 'is_screen_time_exceeded',
-            'bedtime', 'wake_time', 'is_within_allowed_hours',
             'created_at', 'updated_at',
         ]
         read_only_fields = [
             'id', 'age', 'remaining_screen_time', 'is_screen_time_exceeded',
-            'is_within_allowed_hours', 'created_at', 'updated_at',
+            'created_at', 'updated_at',
         ]
 
     def validate_birth_date(self, value):
