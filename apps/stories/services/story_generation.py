@@ -370,6 +370,7 @@ Other important rules:
         story_about = params.get('story_about', 'child')
         supporting_children = params.get('supporting_children') or []
         supporting_pets = params.get('supporting_pets') or []
+        supporting_characters = params.get('supporting_characters') or []
 
         def _cast_block():
             lines = []
@@ -384,6 +385,16 @@ Other important rules:
                     parts = [x for x in [p.get('species'), p.get('description')] if x]
                     detail = f" — {', '.join(parts)}" if parts else ''
                     lines.append(f"- {p.get('name')}{detail}")
+            if supporting_characters:
+                lines.append("Custom characters from the family's story world (recurring fictional friends; keep each appearance and personality consistent):")
+                for c in supporting_characters:
+                    bits = []
+                    if c.get('kind'): bits.append(c['kind'])
+                    if c.get('appearance'): bits.append(f"appearance: {c['appearance']}")
+                    if c.get('personality'): bits.append(f"personality: {c['personality']}")
+                    if c.get('catchphrase'): bits.append(f"catchphrase: \"{c['catchphrase']}\"")
+                    detail = f" — {'; '.join(bits)}" if bits else ''
+                    lines.append(f"- {c.get('name')}{detail}")
             return ("\n" + "\n".join(lines) + "\n") if lines else ""
 
         if include_child:

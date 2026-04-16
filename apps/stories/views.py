@@ -276,8 +276,21 @@ def generate_story(request):
                     'species': p.get('species') or '',
                     'description': p.get('description') or '',
                 })
+    supporting_characters = []
+    character_ids = data.get('character_ids') or []
+    if character_ids and child_profile and child_profile.family:
+        for c in (child_profile.family.custom_characters or []):
+            if c.get('id') in character_ids:
+                supporting_characters.append({
+                    'name': c.get('name') or 'friend',
+                    'kind': c.get('kind') or '',
+                    'appearance': c.get('appearance') or '',
+                    'personality': c.get('personality') or '',
+                    'catchphrase': c.get('catchphrase') or '',
+                })
     data['supporting_children'] = supporting_children
     data['supporting_pets'] = supporting_pets
+    data['supporting_characters'] = supporting_characters
 
     age = data['age']
     if age <= 3:

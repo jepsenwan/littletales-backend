@@ -147,6 +147,10 @@ class StoryGenerationInputSerializer(serializers.Serializer):
     pet_ids = serializers.ListField(
         child=serializers.CharField(), required=False, default=list,
     )
+    # Custom character ids (string) to include. Matches Family.custom_characters[*].id.
+    character_ids = serializers.ListField(
+        child=serializers.CharField(), required=False, default=list,
+    )
     # Who the story is "about" — 'child' (default) or 'pet'. Pet means the
     # plot centers on a pet; child is still the listener and vocab anchor.
     story_about = serializers.ChoiceField(

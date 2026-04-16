@@ -107,7 +107,7 @@ class FamilySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Family
-        fields = ['id', 'name', 'created_by', 'created_at', 'pets', 'members_count', 'children_count']
+        fields = ['id', 'name', 'created_by', 'created_at', 'pets', 'custom_characters', 'members_count', 'children_count']
         read_only_fields = ['id', 'created_by', 'created_at', 'members_count', 'children_count']
 
     def get_members_count(self, obj):

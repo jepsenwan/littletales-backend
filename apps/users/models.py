@@ -69,6 +69,13 @@ class Family(models.Model):
             "{id: str, name: str, species: str, emoji: str, description: str}"
         ),
     )
+    custom_characters = models.JSONField(
+        default=list, blank=True,
+        help_text=(
+            "List of fictional recurring characters the family can include in stories. "
+            "Each entry: {id, name, kind, emoji, appearance, personality, catchphrase}"
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
